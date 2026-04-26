@@ -1,0 +1,459 @@
+<!doctype html>
+<!-- Contact Detail — chosen
+     Option C's expressive header + action bar with check row.
+     Option A's single-column body: Summary → Follow-ups → Diary → Sources. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>net-work · Sarah Kauffman</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --stone: #f7f4ec; --stone-raised: #ffffff; --stone-sunken: #ece9e0;
+    --ink: #1c1813; --ink-muted: #544a3c; --ink-faint: #9d9382; --rule: #e6dfd1;
+    --brass: #876522; --brass-deep: #5e4715; --brass-soft: #ece2c0;
+    --sage: #6e8a6a; --madder: #b14228;
+    --fresh-green: #5a7a3a; --fading-yellow: #a8841f; --cold-red: #9c4828;
+    --av-1: #8b4a1f; --av-2: #5a7a3a; --av-3: #a8841f; --av-4: #9c4828;
+    --av-5: #3e5e5a; --av-6: #722f3a; --av-7: #6e8a6a; --av-8: #5a4a3c;
+    --av-9: #876522; --av-10: #4a5e2c;
+    --geist: 'Geist', -apple-system, system-ui, sans-serif;
+    --serif: 'Source Serif 4', Georgia, serif;
+    --jet: 'JetBrains Mono', ui-monospace, monospace;
+    --motion-fast: 120ms cubic-bezier(0.16, 1, 0.3, 1);
+    --motion-base: 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: var(--geist); background: var(--stone); color: var(--ink); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; }
+
+  /* ============ Topbar ============ */
+  .topbar {
+    position: sticky; top: 0; z-index: 60;
+    background: rgba(247,244,236,0.92);
+    backdrop-filter: saturate(140%) blur(14px);
+    border-bottom: 1px solid var(--rule);
+    display: grid; grid-template-columns: 200px minmax(0, 1fr) auto;
+    align-items: center; gap: 24px; padding: 12px 24px;
+  }
+  .brand { font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 22px; font-variation-settings: 'opsz' 60; letter-spacing: -0.01em; }
+  .search { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border: 1px solid var(--rule); border-radius: 10px; background: var(--stone-raised); width: 100%; }
+  .search:focus-within { border-color: var(--brass); }
+  .search svg { width: 16px; height: 16px; stroke: var(--ink-faint); flex-shrink: 0; }
+  .search input { flex: 1; border: 0; background: transparent; outline: none; font: inherit; font-size: 14px; color: var(--ink); }
+  .search input::placeholder { color: var(--ink-faint); }
+  .search .kbd { font-family: var(--jet); font-size: 10.5px; padding: 1px 5px; border-radius: 4px; background: var(--stone-sunken); color: var(--ink-muted); }
+  .top-utils { display: flex; gap: 6px; }
+  .top-utils button { font-size: 12px; font-weight: 500; padding: 7px 12px; border: 1px solid var(--rule); border-radius: 7px; background: transparent; color: var(--ink-muted); cursor: pointer; transition: background var(--motion-fast); }
+  .top-utils button:hover { background: var(--stone-raised); color: var(--ink); }
+
+  /* ============ Shell ============ */
+  .shell { display: grid; grid-template-columns: 64px 1fr; min-height: calc(100dvh - 60px); }
+  .nav { border-right: 1px solid var(--rule); padding: 20px 8px; background: var(--stone); display: flex; flex-direction: column; align-items: center; gap: 4px; position: sticky; top: 60px; height: calc(100dvh - 60px); }
+  .nav-link { width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--ink-muted); transition: background var(--motion-fast), color var(--motion-fast); }
+  .nav-link:hover { background: var(--stone-sunken); color: var(--ink); }
+  .nav-link.active { background: var(--brass-soft); color: var(--ink); }
+  .nav-link svg { width: 18px; height: 18px; stroke-width: 1.5; }
+  .nav-spacer { flex: 1; }
+
+  .stage { max-width: 1080px; padding: 32px 56px 96px; }
+
+  .breadcrumb {
+    font-size: 12px; color: var(--ink-faint); margin-bottom: 32px; font-weight: 500;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .breadcrumb a { color: var(--ink-muted); }
+  .breadcrumb .sep { color: var(--rule); }
+
+  /* ============ Hero (from Option C) ============ */
+  .hero {
+    display: grid; grid-template-columns: minmax(0, 1.5fr) auto; gap: 56px;
+    align-items: end; padding-bottom: 36px; border-bottom: 1px solid var(--rule);
+  }
+  .hero-main { display: flex; flex-direction: column; gap: 16px; }
+  .header-meta-row {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    font-size: 12.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums;
+  }
+  .category-chip {
+    font-size: 11px; padding: 3px 8px; border-radius: 4px;
+    background: var(--ink); color: var(--stone); font-weight: 600; letter-spacing: 0.04em;
+  }
+  .header-meta-row .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--ink-faint); }
+  .name-row { display: grid; grid-template-columns: 88px 1fr; gap: 24px; align-items: center; }
+  .avatar-lg {
+    width: 88px; height: 88px; border-radius: 50%;
+    background: var(--av-1); color: var(--stone);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 32px;
+    font-variation-settings: 'opsz' 60;
+  }
+  .name {
+    font-family: var(--serif); font-style: italic; font-weight: 500;
+    font-size: clamp(56px, 7.5vw, 96px); line-height: 0.92; margin: 0;
+    letter-spacing: -0.03em; font-variation-settings: 'opsz' 144;
+  }
+  .tags-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag { font-size: 11.5px; padding: 3px 8px; border-radius: 4px; background: var(--brass-soft); color: var(--brass-deep); font-weight: 500; }
+  .tag-add { font-size: 11.5px; padding: 3px 8px; border-radius: 4px; border: 1px dashed var(--rule); color: var(--ink-faint); font-weight: 500; background: transparent; cursor: pointer; }
+
+  .hero-right { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .fresh-ring-xl { width: 120px; height: 120px; position: relative; }
+  .fresh-ring-xl svg { width: 120px; height: 120px; transform: rotate(-90deg); }
+  .fresh-ring-xl .track { fill: none; stroke: var(--rule); stroke-width: 8; }
+  .fresh-ring-xl .progress { fill: none; stroke-width: 8; stroke-linecap: round; stroke-dasharray: 326.7; stroke-dashoffset: calc(326.7 - 326.7 * var(--p, 0.5)); }
+  .fresh-ring-xl .num { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .fresh-ring-xl .n { font-size: 36px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -0.025em; }
+  .fresh-ring-xl .of { font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .fresh-label-row { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .fresh-label-row .label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
+  .fresh-label-row .small { font-size: 11px; color: var(--ink-faint); }
+
+  /* Action bar */
+  .action-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 16px;
+    padding: 20px 0; border-bottom: 1px solid var(--rule);
+  }
+  .actions-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .action-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border-radius: 7px;
+    border: 1px solid var(--rule); background: var(--stone-raised);
+    font-size: 13px; font-weight: 500; color: var(--ink); cursor: pointer;
+    transition: background var(--motion-fast), border-color var(--motion-fast);
+  }
+  .action-btn:hover { background: var(--stone); border-color: var(--brass); }
+  .action-btn svg { width: 14px; height: 14px; stroke-width: 1.5; }
+  .action-btn.primary { background: var(--ink); color: var(--stone); border-color: var(--ink); }
+  .action-btn.primary:hover { background: #2a241c; }
+  .check-row { display: flex; gap: 16px; }
+  .check {
+    display: flex; align-items: center; gap: 8px;
+    background: transparent; border: 0; padding: 0; cursor: pointer;
+    font-size: 13px; color: var(--ink-muted); font-weight: 500;
+    transition: color var(--motion-fast);
+  }
+  .check:hover { color: var(--ink); }
+  .check .dot {
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 1.5px solid var(--rule); background: transparent;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    transition: border-color var(--motion-fast), background var(--motion-fast);
+  }
+  .check.checked .dot { background: var(--ink); border-color: var(--ink); }
+  .check.checked .dot svg { width: 11px; height: 11px; stroke: var(--stone); stroke-width: 2.5; fill: none; }
+  .check.checked.connected .dot { background: var(--sage); border-color: var(--sage); }
+  .check.checked { color: var(--ink); }
+
+  /* ============ Body sections (from Option A) ============ */
+  section.block { padding: 32px 0; border-bottom: 1px solid var(--rule); }
+  section.block:last-child { border-bottom: 0; }
+  .block-h { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
+  .block-h h2 { font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 24px; margin: 0; letter-spacing: -0.012em; font-variation-settings: 'opsz' 60; }
+  .block-h .right { font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+  .summary p { font-size: 17px; line-height: 1.65; margin: 0; color: var(--ink); max-width: 64ch; }
+  .summary-meta { margin-top: 12px; font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; display: flex; gap: 8px; align-items: center; }
+  .summary-meta button { border: 0; background: transparent; color: var(--brass-deep); cursor: pointer; font: inherit; font-weight: 500; }
+
+  /* Follow-ups */
+  .followup-list { display: flex; flex-direction: column; gap: 8px; }
+  .followup {
+    display: grid; grid-template-columns: 22px 1fr auto;
+    align-items: center; gap: 14px; padding: 14px 16px;
+    background: var(--stone-raised); border: 1px solid var(--rule); border-radius: 10px;
+  }
+  .followup .check-circle {
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 1.5px solid var(--rule); background: transparent;
+    cursor: pointer; padding: 0;
+  }
+  .followup-text { font-size: 14px; color: var(--ink); margin: 0; line-height: 1.4; }
+  .followup-meta { font-size: 11.5px; color: var(--ink-faint); margin: 4px 0 0; font-variant-numeric: tabular-nums; }
+  .followup-aside { display: flex; gap: 6px; align-items: center; }
+  .pill-quiet {
+    font-size: 11px; padding: 3px 8px; border-radius: 999px;
+    border: 1px solid var(--rule); background: transparent;
+    color: var(--ink-muted); font-weight: 500;
+  }
+  .pill-quiet.overdue { color: var(--cold-red); border-color: var(--cold-red); }
+
+  /* Diary */
+  .diary { display: flex; flex-direction: column; }
+  .diary-entry {
+    display: grid; grid-template-columns: 110px 1fr;
+    gap: 24px; padding: 18px 0;
+    border-top: 1px solid var(--rule);
+    cursor: pointer;
+    transition: background var(--motion-fast);
+  }
+  .diary-entry:first-child { border-top: 0; padding-top: 0; }
+  .diary-entry:hover { background: var(--stone-raised); margin: 0 -16px; padding-left: 16px; padding-right: 16px; border-radius: 8px; }
+  .diary-time { font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; padding-top: 2px; }
+  .diary-time .year { display: block; color: var(--ink); font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .diary-channel {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    font-weight: 600; margin-bottom: 6px;
+  }
+  .diary-channel svg { width: 12px; height: 12px; stroke-width: 1.5; }
+  .diary-channel.imessage { color: var(--av-2); }
+  .diary-channel.call { color: var(--av-5); }
+  .diary-channel.email { color: var(--av-9); }
+  .diary-channel.event { color: var(--av-3); }
+  .diary-channel.note { color: var(--ink-muted); }
+  .diary-summary { font-size: 14.5px; line-height: 1.55; color: var(--ink); margin: 0; max-width: 70ch; }
+  .diary-extra { margin-top: 6px; font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+  /* Sources & merge */
+  .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .meta-block { display: flex; flex-direction: column; gap: 4px; }
+  .meta-h { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; margin: 0 0 6px; }
+  .meta-block .body { font-size: 13px; color: var(--ink-muted); line-height: 1.55; font-variant-numeric: tabular-nums; }
+  .meta-block .body strong { color: var(--ink); font-weight: 600; }
+
+  .mockup-label {
+    position: fixed; bottom: 12px; right: 16px; z-index: 100;
+    font-size: 11px; letter-spacing: 0.1em; font-weight: 500;
+    color: var(--ink-faint); background: var(--stone-raised);
+    border: 1px solid var(--rule); padding: 4px 10px; border-radius: 6px;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<div class="mockup-label">Contact · chosen</div>
+
+<header class="topbar">
+  <div class="brand">net-work</div>
+  <div class="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+    <input placeholder="Search contacts, tags, or notes" />
+    <span class="kbd">/</span>
+  </div>
+  <div class="top-utils">
+    <button>Theme · light</button>
+    <button>?</button>
+  </div>
+</header>
+
+<div class="shell">
+  <aside class="nav">
+    <a href="#" class="nav-link" title="This week">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+    </a>
+    <a href="#" class="nav-link active" title="Contacts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+    </a>
+    <a href="#" class="nav-link" title="Triage">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M9 12h6M9 8h6M9 16h4"/></svg>
+    </a>
+    <a href="#" class="nav-link" title="Merge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 4v6a4 4 0 0 0 4 4h6M17 14l-3-3m3 3-3 3"/></svg>
+    </a>
+    <a href="#" class="nav-link" title="Follow-ups">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 6h14M5 12h14M5 18h10"/></svg>
+    </a>
+    <div class="nav-spacer"></div>
+  </aside>
+
+  <main class="stage">
+    <nav class="breadcrumb">
+      <a href="#">Contacts</a> <span class="sep">/</span> <span>Sarah Kauffman</span>
+    </nav>
+
+    <!-- Hero (from Option C) -->
+    <section class="hero">
+      <div class="hero-main">
+        <div class="header-meta-row">
+          <span class="category-chip">PERSONAL</span>
+          <span class="dot"></span>
+          <span>last seen 253 days ago</span>
+          <span class="dot"></span>
+          <span>11 threads · 4 calls · 1 calendar event</span>
+        </div>
+        <div class="name-row">
+          <div class="avatar-lg">SK</div>
+          <h1 class="name">Sarah Kauffman</h1>
+        </div>
+        <div class="tags-row">
+          <span class="tag">byu-volleyball</span>
+          <span class="tag">denver</span>
+          <button class="tag-add">+ tag</button>
+        </div>
+      </div>
+
+      <div class="hero-right">
+        <div class="fresh-ring-xl" style="--p: 0.34;">
+          <svg viewBox="0 0 120 120">
+            <circle class="track" cx="60" cy="60" r="52"/>
+            <circle class="progress" cx="60" cy="60" r="52" style="stroke: var(--fading-yellow);"/>
+          </svg>
+          <div class="num">
+            <span class="n">34</span>
+            <span class="of">of 100</span>
+          </div>
+        </div>
+        <div class="fresh-label-row">
+          <span class="label" style="color: var(--fading-yellow);">Fading</span>
+          <span class="small">1 point above Cold</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Action bar -->
+    <div class="action-bar">
+      <div class="actions-row">
+        <button class="action-btn primary">+ Add to this week</button>
+        <button class="action-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          Call
+        </button>
+        <button class="action-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Text
+        </button>
+        <button class="action-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="m22 6-10 7L2 6"/></svg>
+          Email
+        </button>
+        <button class="action-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          LinkedIn
+        </button>
+      </div>
+      <div class="check-row">
+        <button class="check"><span class="dot"></span> Reached out</button>
+        <button class="check"><span class="dot"></span> Connected</button>
+      </div>
+    </div>
+
+    <!-- Body (from Option A) -->
+    <section class="block summary">
+      <div class="block-h">
+        <h2>Relationship summary</h2>
+        <span class="right">cached · 6d ago</span>
+      </div>
+      <p>Sarah was your teammate at BYU. Twelve years of friendship, mostly carried by sporadic but substantive catch-ups when one of you is passing through the other's city. She's navigating a career transition this spring and has been generous with her time. The Denver question she asked in August is the longest-running open thread you have with her.</p>
+      <div class="summary-meta">cached · regenerated 6d ago · <button>Regenerate →</button></div>
+    </section>
+
+    <section class="block">
+      <div class="block-h">
+        <h2>Open follow-ups</h2>
+        <span class="right">2 open</span>
+      </div>
+      <div class="followup-list">
+        <div class="followup">
+          <button class="check-circle"></button>
+          <div>
+            <p class="followup-text">Confirm whether you'll be in Denver next month — answer the question Sarah asked Aug 14.</p>
+            <p class="followup-meta">Surfaced from iMessage thread · open 253 days</p>
+          </div>
+          <div class="followup-aside">
+            <span class="pill-quiet overdue">overdue</span>
+          </div>
+        </div>
+        <div class="followup">
+          <button class="check-circle"></button>
+          <div>
+            <p class="followup-text">Send the Cap13 LP deck Sarah asked about — she mentioned a friend interested in a small allocation.</p>
+            <p class="followup-meta">Surfaced from June email thread · open 47 days</p>
+          </div>
+          <div class="followup-aside">
+            <span class="pill-quiet">snooze 7d</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="block-h">
+        <h2>Diary</h2>
+        <span class="right">11 entries · newest first</span>
+      </div>
+      <div class="diary">
+
+        <article class="diary-entry">
+          <div class="diary-time"><span class="year">2026</span>Aug 14<br/>7:42pm</div>
+          <div>
+            <span class="diary-channel imessage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>iMessage thread · 8 messages · 4h</span>
+            <p class="diary-summary">Sarah sent a photo from her daughter's birthday party. She asked whether you'd be in Denver next month and floated lunch. You said you'd check the calendar; the thread paused there.</p>
+          </div>
+        </article>
+
+        <article class="diary-entry">
+          <div class="diary-time">Jul 23<br/>4:08pm</div>
+          <div>
+            <span class="diary-channel call"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Phone call · outbound · 24m</span>
+            <p class="diary-summary">Catch-up call. She walked through the offer she's weighing from a smaller firm, and you talked through what mattered to her about it.</p>
+            <p class="diary-extra">Transcription will be available post-v1.</p>
+          </div>
+        </article>
+
+        <article class="diary-entry">
+          <div class="diary-time">Jun 02<br/>10:15am</div>
+          <div>
+            <span class="diary-channel email"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/></svg>Email thread · 5 messages</span>
+            <p class="diary-summary">Long exchange about her transition out of Greylock. She asked for the Cap13 deck and mentioned a friend potentially interested in a small LP allocation. You said you'd send it.</p>
+          </div>
+        </article>
+
+        <article class="diary-entry">
+          <div class="diary-time">May 18<br/>12:30pm</div>
+          <div>
+            <span class="diary-channel event"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Calendar event · lunch · SF</span>
+            <p class="diary-summary">Lunch at Trou Normand. 90 minutes. Long conversation about Cap13's strategy and her own plans.</p>
+          </div>
+        </article>
+
+        <article class="diary-entry">
+          <div class="diary-time">Mar 11<br/>9:02pm</div>
+          <div>
+            <span class="diary-channel note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>Personal note</span>
+            <p class="diary-summary">"Sarah's mom is in hospice. She mentioned it briefly — don't make a big thing of it but check back in a couple weeks."</p>
+          </div>
+        </article>
+
+        <article class="diary-entry">
+          <div class="diary-time"><span class="year">2025</span>Dec 04<br/>8:14am</div>
+          <div>
+            <span class="diary-channel imessage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>iMessage thread · 2 messages · birthday</span>
+            <p class="diary-summary">Birthday text. She replied with a photo from a hike with her kids. Brief, warm, no follow-up needed.</p>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="block-h">
+        <h2>Sources &amp; merge history</h2>
+      </div>
+      <div class="meta-grid">
+        <div class="meta-block">
+          <p class="meta-h">Source records</p>
+          <p class="body"><strong>Apple Contacts</strong> · sarahk@gmail.com<br/><strong>Google Contacts</strong> · sarah.kauffman@gmail.com<br/><strong>iMessage</strong> · +1 (303) 555-0142<br/><strong>LinkedIn CSV</strong> · /in/sarah-kauffman</p>
+        </div>
+        <div class="meta-block">
+          <p class="meta-h">Merge history</p>
+          <p class="body">Merged from 4 source records on Jan 18, 2026 · auto-merged by exact email match · <a href="#" style="color: var(--brass-deep);">view history</a> · <a href="#" style="color: var(--brass-deep);">un-merge</a></p>
+        </div>
+        <div class="meta-block">
+          <p class="meta-h">Cadence override</p>
+          <p class="body">Default · uses your global cadence rules<br/><a href="#" style="color: var(--brass-deep);">set per-contact cadence →</a></p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+</body>
+</html>

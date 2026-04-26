@@ -1,0 +1,518 @@
+<!doctype html>
+<!-- Merge — Option C · Expressive
+     Editorial. Massive italic title + a hero "ready to merge" block with prominent
+     bulk-merge CTA. Sectioned by confidence with featured ambiguous-card spread. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>net-work · Merge · Option C</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --stone: #f7f4ec; --stone-raised: #ffffff; --stone-sunken: #ece9e0;
+    --ink: #1c1813; --ink-muted: #544a3c; --ink-faint: #9d9382; --rule: #e6dfd1;
+    --brass: #876522; --brass-deep: #5e4715; --brass-soft: #ece2c0;
+    --sage: #6e8a6a; --madder: #b14228;
+    --fresh-green: #5a7a3a; --fading-yellow: #a8841f; --cold-red: #9c4828;
+    --av-1: #8b4a1f; --av-2: #5a7a3a; --av-3: #a8841f; --av-4: #9c4828;
+    --av-5: #3e5e5a; --av-6: #722f3a; --av-7: #6e8a6a; --av-8: #5a4a3c;
+    --av-9: #876522; --av-10: #4a5e2c;
+    --geist: 'Geist', -apple-system, system-ui, sans-serif;
+    --serif: 'Source Serif 4', Georgia, serif;
+    --jet: 'JetBrains Mono', ui-monospace, monospace;
+    --motion-fast: 120ms cubic-bezier(0.16, 1, 0.3, 1);
+    --motion-base: 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: var(--geist); background: var(--stone); color: var(--ink); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; }
+
+  .topbar { position: sticky; top: 0; z-index: 60; background: rgba(247,244,236,0.92); backdrop-filter: saturate(140%) blur(14px); border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: 200px minmax(0, 1fr) auto; align-items: center; gap: 24px; padding: 12px 24px; }
+  .brand { font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 22px; font-variation-settings: 'opsz' 60; letter-spacing: -0.01em; }
+  .search { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border: 1px solid var(--rule); border-radius: 10px; background: var(--stone-raised); width: 100%; }
+  .search:focus-within { border-color: var(--brass); }
+  .search svg { width: 16px; height: 16px; stroke: var(--ink-faint); flex-shrink: 0; }
+  .search input { flex: 1; border: 0; background: transparent; outline: none; font: inherit; font-size: 14px; color: var(--ink); }
+  .search input::placeholder { color: var(--ink-faint); }
+  .search .kbd { font-family: var(--jet); font-size: 10.5px; padding: 1px 5px; border-radius: 4px; background: var(--stone-sunken); color: var(--ink-muted); }
+  .top-utils { display: flex; gap: 6px; }
+  .top-utils button { font-size: 12px; font-weight: 500; padding: 7px 12px; border: 1px solid var(--rule); border-radius: 7px; background: transparent; color: var(--ink-muted); cursor: pointer; }
+
+  .shell { display: grid; grid-template-columns: 64px 1fr; min-height: calc(100dvh - 60px); }
+  .nav { border-right: 1px solid var(--rule); padding: 20px 8px; background: var(--stone); display: flex; flex-direction: column; align-items: center; gap: 4px; position: sticky; top: 60px; height: calc(100dvh - 60px); }
+  .nav-link { width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--ink-muted); transition: background var(--motion-fast); }
+  .nav-link:hover { background: var(--stone-sunken); color: var(--ink); }
+  .nav-link.active { background: var(--brass-soft); color: var(--ink); }
+  .nav-link svg { width: 18px; height: 18px; stroke-width: 1.5; }
+  .nav-spacer { flex: 1; }
+
+  .stage { padding: 32px 56px 96px; max-width: 1280px; margin: 0 auto; }
+
+  /* Hero */
+  .hero {
+    display: grid; grid-template-columns: minmax(0, 1.5fr) auto; gap: 48px;
+    align-items: end; padding-bottom: 32px; border-bottom: 1px solid var(--rule);
+  }
+  .hero-eyebrow { font-size: 11.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; font-weight: 600; }
+  .page-title { font-family: var(--serif); font-style: italic; font-weight: 500; font-size: clamp(56px, 7vw, 88px); line-height: 0.94; margin: 0; letter-spacing: -0.025em; font-variation-settings: 'opsz' 144; }
+  .hero-meta { display: flex; gap: 28px; }
+  .stat { display: flex; flex-direction: column; gap: 4px; }
+  .stat-h { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+  .stat-v { font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 32px; line-height: 1; letter-spacing: -0.012em; font-variation-settings: 'opsz' 96; }
+  .stat-v.exact { color: var(--fresh-green); }
+  .stat-v.high { color: var(--brass-deep); }
+  .stat-v.amb { color: var(--fading-yellow); }
+
+  /* Hero CTA card */
+  .hero-cta {
+    margin-top: 32px; padding: 24px 28px;
+    background: var(--ink); color: var(--stone); border-radius: 14px;
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 32px;
+    align-items: center;
+  }
+  .hero-cta-text { display: flex; flex-direction: column; gap: 6px; }
+  .hero-cta-h { font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 28px; line-height: 1.05; margin: 0; font-variation-settings: 'opsz' 96; letter-spacing: -0.018em; }
+  .hero-cta-p { font-size: 13.5px; line-height: 1.5; color: rgba(247,244,236,0.75); margin: 0; max-width: 60ch; }
+  .hero-cta-actions { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+  .btn-primary {
+    background: var(--brass); color: var(--ink); border: 0;
+    font-size: 13.5px; font-weight: 600; padding: 10px 18px; border-radius: 8px;
+    cursor: pointer; transition: background var(--motion-fast);
+  }
+  .btn-primary:hover { background: #a07b29; }
+  .btn-ghost-dark {
+    background: transparent; color: var(--stone); border: 1px solid rgba(247,244,236,0.2);
+    font-size: 13px; font-weight: 500; padding: 9px 14px; border-radius: 8px; cursor: pointer;
+  }
+  .btn-ghost-dark:hover { background: rgba(247,244,236,0.08); }
+
+  /* Section */
+  .section { margin: 56px 0 0; }
+  .section-h {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--rule);
+    flex-wrap: wrap; gap: 16px;
+  }
+  .section-title { display: flex; align-items: baseline; gap: 12px; }
+  .section-title h2 { font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 28px; line-height: 1; margin: 0; letter-spacing: -0.012em; font-variation-settings: 'opsz' 60; }
+  .section-title .count {
+    font-family: var(--jet); font-size: 12px; padding: 3px 8px; border-radius: 4px;
+    background: var(--stone-sunken); color: var(--ink-muted); font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .section-helper { font-size: 13px; color: var(--ink-muted); max-width: 50ch; }
+
+  /* Compact grid for exact/high */
+  .compact-grid {
+    display: grid; grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .compact-card {
+    display: grid; grid-template-columns: 18px auto 1fr auto;
+    align-items: center; gap: 12px;
+    padding: 14px 16px;
+    background: var(--stone-raised); border: 1px solid var(--rule); border-radius: 10px;
+    transition: border-color var(--motion-fast);
+  }
+  .compact-card.selected { background: var(--brass-soft); border-color: transparent; }
+  .compact-card:hover { border-color: var(--brass); }
+
+  .row-check { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--rule); background: transparent; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center; }
+  .row-check.checked { background: var(--ink); border-color: var(--ink); }
+  .row-check.checked svg { width: 11px; height: 11px; stroke: var(--stone); stroke-width: 2.5; fill: none; }
+
+  .av-stack { display: flex; align-items: center; }
+  .av-stack .a {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 11.5px;
+    color: var(--stone);
+    box-shadow: 0 0 0 2px var(--stone-raised);
+    margin-left: -8px;
+  }
+  .compact-card.selected .av-stack .a { box-shadow: 0 0 0 2px var(--brass-soft); }
+  .av-stack .a:first-child { margin-left: 0; }
+
+  .compact-name {
+    display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  }
+  .compact-name .n { font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: -0.012em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .compact-name .e { font-size: 11px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+  .compact-arrow { color: var(--ink-faint); }
+  .compact-arrow svg { width: 14px; height: 14px; stroke-width: 1.5; }
+
+  /* Ambiguous spread */
+  .amb-spread {
+    display: grid; grid-template-columns: 1fr; gap: 16px;
+  }
+  .amb-card {
+    background: var(--stone-raised); border: 1px solid var(--rule); border-radius: 12px;
+    padding: 20px;
+    border-left: 3px solid var(--fading-yellow);
+  }
+  .amb-card-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 12px; gap: 12px;
+  }
+  .amb-card-name {
+    font-size: 18px; font-weight: 600; color: var(--ink); letter-spacing: -0.018em; margin: 0;
+  }
+  .amb-card-flag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10.5px; padding: 3px 8px; border-radius: 4px;
+    background: rgba(168,132,31,0.16); color: var(--fading-yellow);
+    font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; flex-shrink: 0;
+  }
+  .amb-card-flag svg { width: 11px; height: 11px; stroke-width: 2; }
+
+  .amb-records { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  .amb-record {
+    display: grid; grid-template-columns: 32px 1fr; gap: 10px; align-items: center;
+    background: var(--stone); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 8px 10px;
+  }
+  .amb-record .a {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 11px;
+    color: var(--stone);
+  }
+  .amb-record .info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .amb-record .src { font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--brass-deep); font-weight: 600; }
+  .amb-record .det { font-size: 11.5px; color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .amb-record.conflict { background: rgba(168,132,31,0.06); border-color: rgba(168,132,31,0.4); }
+
+  .amb-conflict-note {
+    font-size: 12px; color: var(--ink-muted); padding: 8px 10px;
+    background: rgba(168,132,31,0.08); border-radius: 6px; margin-bottom: 12px;
+    line-height: 1.5;
+  }
+  .amb-conflict-note strong { color: var(--fading-yellow); font-weight: 600; }
+
+  .amb-actions { display: flex; gap: 8px; }
+  .amb-actions button {
+    flex: 1; font-size: 12.5px; padding: 7px 10px; border-radius: 7px;
+    border: 1px solid var(--rule); background: transparent; color: var(--ink); font-weight: 500;
+    cursor: pointer;
+  }
+  .amb-actions button:hover { background: var(--stone); border-color: var(--brass); }
+  .amb-actions .primary { background: var(--ink); color: var(--stone); border-color: var(--ink); }
+  .amb-actions .primary:hover { background: #2a241c; }
+  .amb-actions .danger:hover { color: var(--cold-red); border-color: var(--cold-red); }
+
+  .mockup-label {
+    position: fixed; bottom: 12px; right: 16px; z-index: 100;
+    font-size: 11px; letter-spacing: 0.1em; font-weight: 500;
+    color: var(--ink-faint); background: var(--stone-raised);
+    border: 1px solid var(--rule); padding: 4px 10px; border-radius: 6px;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<div class="mockup-label">Merge · Option C · Expressive</div>
+
+<header class="topbar">
+  <div class="brand">net-work</div>
+  <div class="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+    <input placeholder="Search merge groups by name" />
+    <span class="kbd">/</span>
+  </div>
+  <div class="top-utils">
+    <button>Theme · light</button>
+    <button>?</button>
+  </div>
+</header>
+
+<div class="shell">
+  <aside class="nav">
+    <a href="#" class="nav-link" title="This week"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></a>
+    <a href="#" class="nav-link" title="Contacts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg></a>
+    <a href="#" class="nav-link" title="Triage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M9 12h6M9 8h6M9 16h4"/></svg></a>
+    <a href="#" class="nav-link active" title="Merge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 4v6a4 4 0 0 0 4 4h6M17 14l-3-3m3 3-3 3"/></svg></a>
+    <a href="#" class="nav-link" title="Follow-ups"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 6h14M5 12h14M5 18h10"/></svg></a>
+    <div class="nav-spacer"></div>
+  </aside>
+
+  <main class="stage">
+    <section class="hero">
+      <div>
+        <p class="hero-eyebrow">Onboarding · step 2 of 3</p>
+        <h1 class="page-title">Merge.</h1>
+      </div>
+      <div class="hero-meta">
+        <div class="stat">
+          <span class="stat-h">Pending</span>
+          <span class="stat-v">47</span>
+        </div>
+        <div class="stat">
+          <span class="stat-h">Exact</span>
+          <span class="stat-v exact">28</span>
+        </div>
+        <div class="stat">
+          <span class="stat-h">High</span>
+          <span class="stat-v high">10</span>
+        </div>
+        <div class="stat">
+          <span class="stat-h">Ambiguous</span>
+          <span class="stat-v amb">9</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="hero-cta">
+      <div class="hero-cta-text">
+        <h2 class="hero-cta-h">38 groups are safe to bulk-merge.</h2>
+        <p class="hero-cta-p">All exact email matches and high-confidence phone matches. The remaining 9 ambiguous groups need a closer look — review them below or skip ahead to triage.</p>
+      </div>
+      <div class="hero-cta-actions">
+        <button class="btn-ghost-dark">Skip to triage →</button>
+        <button class="btn-primary">Merge 38 groups</button>
+      </div>
+    </div>
+
+    <!-- Exact + High combined compact grid -->
+    <section class="section">
+      <div class="section-h">
+        <div class="section-title">
+          <h2>Ready to merge</h2>
+          <span class="count">38 groups</span>
+        </div>
+        <p class="section-helper">Pre-checked. Click any to review individually before bulk-merging.</p>
+      </div>
+
+      <div class="compact-grid">
+        <article class="compact-card selected">
+          <button class="row-check checked"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.5 3.5L13 5"/></svg></button>
+          <div class="av-stack">
+            <div class="a" style="background: var(--av-1);">SK</div>
+            <div class="a" style="background: var(--av-1);">SK</div>
+            <div class="a" style="background: var(--av-1);">SK</div>
+            <div class="a" style="background: var(--av-1);">SK</div>
+          </div>
+          <div class="compact-name"><span class="n">Sarah Kauffman</span><span class="e">4 records · email match</span></div>
+          <span class="compact-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18l6-6-6-6"/></svg></span>
+        </article>
+
+        <article class="compact-card selected">
+          <button class="row-check checked"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.5 3.5L13 5"/></svg></button>
+          <div class="av-stack">
+            <div class="a" style="background: var(--av-3);">MV</div>
+            <div class="a" style="background: var(--av-3);">MV</div>
+            <div class="a" style="background: var(--av-3);">MV</div>
+          </div>
+          <div class="compact-name"><span class="n">Marisol Vega</span><span class="e">3 records · email match</span></div>
+          <span class="compact-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18l6-6-6-6"/></svg></span>
+        </article>
+
+        <article class="compact-card selected">
+          <button class="row-check checked"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.5 3.5L13 5"/></svg></button>
+          <div class="av-stack">
+            <div class="a" style="background: var(--av-4);">TH</div>
+            <div class="a" style="background: var(--av-4);">TH</div>
+          </div>
+          <div class="compact-name"><span class="n">Tom Halloran</span><span class="e">2 records · email match</span></div>
+          <span class="compact-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18l6-6-6-6"/></svg></span>
+        </article>
+
+        <article class="compact-card selected">
+          <button class="row-check checked"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.5 3.5L13 5"/></svg></button>
+          <div class="av-stack">
+            <div class="a" style="background: var(--av-5);">PA</div>
+            <div class="a" style="background: var(--av-5);">PA</div>
+          </div>
+          <div class="compact-name"><span class="n">Priya Anand</span><span class="e">2 records · LinkedIn match</span></div>
+          <span class="compact-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18l6-6-6-6"/></svg></span>
+        </article>
+
+        <article class="compact-card selected">
+          <button class="row-check checked"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.5 3.5L13 5"/></svg></button>
+          <div class="av-stack">
+            <div class="a" style="background: var(--av-2);">DC</div>
+            <div class="a" style="background: var(--av-2);">DC</div>
+          </div>
+          <div class="compact-name"><span class="n">David Choe</span><span class="e">2 records · phone match</span></div>
+          <span class="compact-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18l6-6-6-6"/></svg></span>
+        </article>
+
+        <article class="compact-card selected">
+          <button class="row-check checked"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.5 3.5L13 5"/></svg></button>
+          <div class="av-stack">
+            <div class="a" style="background: var(--av-6);">JL</div>
+            <div class="a" style="background: var(--av-6);">JL</div>
+            <div class="a" style="background: var(--av-6);">JL</div>
+          </div>
+          <div class="compact-name"><span class="n">Jonas Lindqvist</span><span class="e">3 records · email match</span></div>
+          <span class="compact-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18l6-6-6-6"/></svg></span>
+        </article>
+
+        <article class="compact-card selected">
+          <button class="row-check checked"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.5 3.5L13 5"/></svg></button>
+          <div class="av-stack">
+            <div class="a" style="background: var(--av-7);">EM</div>
+            <div class="a" style="background: var(--av-7);">EM</div>
+          </div>
+          <div class="compact-name"><span class="n">Esther Mwangi</span><span class="e">2 records · email match</span></div>
+          <span class="compact-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18l6-6-6-6"/></svg></span>
+        </article>
+
+        <article class="compact-card selected">
+          <button class="row-check checked"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.5 3.5L13 5"/></svg></button>
+          <div class="av-stack">
+            <div class="a" style="background: var(--av-8);">RB</div>
+            <div class="a" style="background: var(--av-8);">RB</div>
+          </div>
+          <div class="compact-name"><span class="n">Rebecca Beaumont</span><span class="e">2 records · email match</span></div>
+          <span class="compact-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18l6-6-6-6"/></svg></span>
+        </article>
+
+        <article class="compact-card selected">
+          <button class="row-check checked"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.5 3.5L13 5"/></svg></button>
+          <div class="av-stack">
+            <div class="a" style="background: var(--av-9);">AK</div>
+            <div class="a" style="background: var(--av-9);">AK</div>
+          </div>
+          <div class="compact-name"><span class="n">Aditya Kapoor</span><span class="e">2 records · phone match</span></div>
+          <span class="compact-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18l6-6-6-6"/></svg></span>
+        </article>
+
+        <article class="compact-card selected">
+          <button class="row-check checked"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.5 3.5L13 5"/></svg></button>
+          <div class="av-stack">
+            <div class="a" style="background: var(--av-10);">NS</div>
+            <div class="a" style="background: var(--av-10);">NS</div>
+            <div class="a" style="background: var(--av-10);">NS</div>
+          </div>
+          <div class="compact-name"><span class="n">Naomi Sutter-Akiyama</span><span class="e">3 records · email match</span></div>
+          <span class="compact-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18l6-6-6-6"/></svg></span>
+        </article>
+
+        <article class="compact-card selected" style="opacity: 0.7;">
+          <span style="grid-column: 1 / -1; text-align: center; font-size: 12.5px; color: var(--ink-faint); font-style: italic; padding: 4px 0;">+ 28 more groups in this section</span>
+        </article>
+      </div>
+    </section>
+
+    <!-- Ambiguous featured spread -->
+    <section class="section">
+      <div class="section-h">
+        <div class="section-title">
+          <h2>Need a closer look</h2>
+          <span class="count">9 groups</span>
+        </div>
+        <p class="section-helper">These have a conflict the auto-matcher can't resolve. Review each one before deciding.</p>
+      </div>
+
+      <div class="amb-spread">
+
+        <article class="amb-card">
+          <div class="amb-card-head">
+            <h3 class="amb-card-name">Tom H. / Thomas Halloran</h3>
+            <span class="amb-card-flag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>Name conflict</span>
+          </div>
+          <div class="amb-records">
+            <div class="amb-record conflict">
+              <div class="a" style="background: var(--av-7);">TH</div>
+              <div class="info"><span class="src">Apple Contacts</span><span class="det">Tom H. · +1 (415) 555-0188</span></div>
+            </div>
+            <div class="amb-record conflict">
+              <div class="a" style="background: var(--av-7);">TH</div>
+              <div class="info"><span class="src">LinkedIn CSV</span><span class="det">Thomas Halloran · /in/thalloran</span></div>
+            </div>
+          </div>
+          <p class="amb-conflict-note">Same phone number, but <strong>"Tom H."</strong> in Apple vs. <strong>"Thomas Halloran"</strong> in LinkedIn. Likely the same person — confirm before merging.</p>
+          <div class="amb-actions">
+            <button class="danger">Split</button>
+            <button>Skip</button>
+            <button class="primary">Review →</button>
+          </div>
+        </article>
+
+        <article class="amb-card">
+          <div class="amb-card-head">
+            <h3 class="amb-card-name">Michael Kim</h3>
+            <span class="amb-card-flag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>2 phones</span>
+          </div>
+          <div class="amb-records">
+            <div class="amb-record">
+              <div class="a" style="background: var(--av-9);">MK</div>
+              <div class="info"><span class="src">Apple Contacts</span><span class="det">Michael Kim · m.kim@gmail.com</span></div>
+            </div>
+            <div class="amb-record conflict">
+              <div class="a" style="background: var(--av-9);">MK</div>
+              <div class="info"><span class="src">iMessage</span><span class="det">+1 (212) 555-0177</span></div>
+            </div>
+            <div class="amb-record conflict">
+              <div class="a" style="background: var(--av-9);">MK</div>
+              <div class="info"><span class="src">iMessage</span><span class="det">+1 (310) 555-0291</span></div>
+            </div>
+          </div>
+          <p class="amb-conflict-note">Two different phone numbers in iMessage threads, both texting "Michael Kim." Could be the same person with two phones — or two people sharing a name.</p>
+          <div class="amb-actions">
+            <button class="danger">Split</button>
+            <button>Skip</button>
+            <button class="primary">Review →</button>
+          </div>
+        </article>
+
+        <article class="amb-card">
+          <div class="amb-card-head">
+            <h3 class="amb-card-name">Jane Wilson · "ja@..."</h3>
+            <span class="amb-card-flag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>Weak signal</span>
+          </div>
+          <div class="amb-records">
+            <div class="amb-record">
+              <div class="a" style="background: var(--av-8);">JW</div>
+              <div class="info"><span class="src">Apple Contacts</span><span class="det">Jane Wilson · jane.wilson@gmail.com</span></div>
+            </div>
+            <div class="amb-record conflict">
+              <div class="a" style="background: var(--av-6);">?</div>
+              <div class="info"><span class="src">iMessage</span><span class="det">"ja@gmail.com" · 4 messages</span></div>
+            </div>
+          </div>
+          <p class="amb-conflict-note">Truncated email handle in an old iMessage thread might be Jane, but the partial address isn't enough to be sure.</p>
+          <div class="amb-actions">
+            <button class="danger">Split</button>
+            <button>Skip</button>
+            <button class="primary">Review →</button>
+          </div>
+        </article>
+
+        <article class="amb-card">
+          <div class="amb-card-head">
+            <h3 class="amb-card-name">Daniel W. / Dan Wexford</h3>
+            <span class="amb-card-flag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>Name conflict</span>
+          </div>
+          <div class="amb-records">
+            <div class="amb-record conflict">
+              <div class="a" style="background: var(--av-1);">DW</div>
+              <div class="info"><span class="src">iMessage</span><span class="det">Dan Wexford · +1 (646) 555-0244</span></div>
+            </div>
+            <div class="amb-record conflict">
+              <div class="a" style="background: var(--av-1);">DW</div>
+              <div class="info"><span class="src">Google Contacts</span><span class="det">Daniel W. · dwexford@protonmail.com</span></div>
+            </div>
+          </div>
+          <p class="amb-conflict-note">No shared identifiers. Names suggest the same person, but no matching phone or email.</p>
+          <div class="amb-actions">
+            <button class="danger">Split</button>
+            <button>Skip</button>
+            <button class="primary">Review →</button>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+  </main>
+</div>
+
+</body>
+</html>

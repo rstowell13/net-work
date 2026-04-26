@@ -1,0 +1,428 @@
+<!doctype html>
+<!-- Contacts (bulk list) — Option B · Baseline
+     Two-column with persistent left filter sidebar. Roomier rows, freshness ring per row. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>net-work · Contacts · Option B</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --stone: #f7f4ec; --stone-raised: #ffffff; --stone-sunken: #ece9e0;
+    --ink: #1c1813; --ink-muted: #544a3c; --ink-faint: #9d9382; --rule: #e6dfd1;
+    --brass: #876522; --brass-deep: #5e4715; --brass-soft: #ece2c0;
+    --sage: #6e8a6a; --madder: #b14228;
+    --fresh-green: #5a7a3a; --fading-yellow: #a8841f; --cold-red: #9c4828;
+    --av-1: #8b4a1f; --av-2: #5a7a3a; --av-3: #a8841f; --av-4: #9c4828;
+    --av-5: #3e5e5a; --av-6: #722f3a; --av-7: #6e8a6a; --av-8: #5a4a3c;
+    --av-9: #876522; --av-10: #4a5e2c;
+    --geist: 'Geist', -apple-system, system-ui, sans-serif;
+    --serif: 'Source Serif 4', Georgia, serif;
+    --jet: 'JetBrains Mono', ui-monospace, monospace;
+    --motion-fast: 120ms cubic-bezier(0.16, 1, 0.3, 1);
+    --motion-base: 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: var(--geist); background: var(--stone); color: var(--ink); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; }
+
+  .topbar { position: sticky; top: 0; z-index: 60; background: rgba(247,244,236,0.92); backdrop-filter: saturate(140%) blur(14px); border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: 200px minmax(0, 1fr) auto; align-items: center; gap: 24px; padding: 12px 24px; }
+  .brand { font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 22px; font-variation-settings: 'opsz' 60; letter-spacing: -0.01em; }
+  .search { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border: 1px solid var(--rule); border-radius: 10px; background: var(--stone-raised); width: 100%; }
+  .search:focus-within { border-color: var(--brass); }
+  .search svg { width: 16px; height: 16px; stroke: var(--ink-faint); flex-shrink: 0; }
+  .search input { flex: 1; border: 0; background: transparent; outline: none; font: inherit; font-size: 14px; color: var(--ink); }
+  .search input::placeholder { color: var(--ink-faint); }
+  .search .kbd { font-family: var(--jet); font-size: 10.5px; padding: 1px 5px; border-radius: 4px; background: var(--stone-sunken); color: var(--ink-muted); }
+  .top-utils { display: flex; gap: 6px; }
+  .top-utils button { font-size: 12px; font-weight: 500; padding: 7px 12px; border: 1px solid var(--rule); border-radius: 7px; background: transparent; color: var(--ink-muted); cursor: pointer; }
+
+  .shell { display: grid; grid-template-columns: 64px 1fr; min-height: calc(100dvh - 60px); }
+  .nav { border-right: 1px solid var(--rule); padding: 20px 8px; background: var(--stone); display: flex; flex-direction: column; align-items: center; gap: 4px; position: sticky; top: 60px; height: calc(100dvh - 60px); }
+  .nav-link { width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--ink-muted); transition: background var(--motion-fast); }
+  .nav-link:hover { background: var(--stone-sunken); color: var(--ink); }
+  .nav-link.active { background: var(--brass-soft); color: var(--ink); }
+  .nav-link svg { width: 18px; height: 18px; stroke-width: 1.5; }
+  .nav-spacer { flex: 1; }
+
+  .stage {
+    display: grid; grid-template-columns: 240px 1fr; gap: 0;
+    min-height: calc(100dvh - 60px);
+  }
+
+  /* Filter sidebar */
+  .filter-side {
+    border-right: 1px solid var(--rule);
+    padding: 32px 24px 64px;
+    position: sticky; top: 60px;
+    height: calc(100dvh - 60px);
+    overflow-y: auto;
+  }
+  .filter-h {
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ink-faint); margin: 0 0 12px; font-weight: 600;
+  }
+  .filter-block { margin-bottom: 28px; }
+  .filter-list { display: flex; flex-direction: column; gap: 4px; }
+  .filter-link {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 8px; border-radius: 6px;
+    font-size: 13.5px; color: var(--ink-muted); font-weight: 500;
+    cursor: pointer; transition: background var(--motion-fast), color var(--motion-fast);
+  }
+  .filter-link:hover { background: var(--stone-raised); color: var(--ink); }
+  .filter-link.active { background: var(--brass-soft); color: var(--brass-deep); font-weight: 600; }
+  .filter-link .count { font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .filter-link.active .count { color: var(--brass-deep); }
+
+  .tag-list { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tag-pill {
+    font-size: 11.5px; padding: 3px 8px; border-radius: 4px;
+    background: var(--stone-raised); border: 1px solid var(--rule);
+    color: var(--ink-muted); font-weight: 500; cursor: pointer;
+  }
+  .tag-pill.active { background: var(--brass-soft); color: var(--brass-deep); border-color: var(--brass-soft); }
+
+  /* Main */
+  .main { padding: 32px 40px 64px; min-width: 0; }
+
+  .page-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+  .page-title { font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 36px; line-height: 1; margin: 0; letter-spacing: -0.02em; font-variation-settings: 'opsz' 96; }
+  .page-meta { font-size: 12.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+  .toolbar {
+    display: flex; align-items: center; gap: 16px; padding: 16px 0;
+    border-bottom: 1px solid var(--rule); margin-bottom: 0;
+  }
+  .toolbar .selected-count { font-size: 13px; color: var(--ink-muted); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .toolbar .selected-count strong { color: var(--ink); font-weight: 600; }
+  .toolbar-spacer { flex: 1; }
+  .toolbar-btn {
+    font-size: 12.5px; padding: 6px 12px; border-radius: 7px;
+    border: 1px solid var(--rule); background: var(--stone-raised);
+    color: var(--ink); font-weight: 500; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: background var(--motion-fast), border-color var(--motion-fast);
+  }
+  .toolbar-btn:hover { background: var(--stone); border-color: var(--brass); }
+  .toolbar-btn svg { width: 12px; height: 12px; stroke-width: 1.5; }
+  .toolbar-btn.primary { background: var(--ink); color: var(--stone); border-color: var(--ink); }
+  .toolbar-btn.primary:hover { background: #2a241c; }
+
+  /* Roomier rows */
+  .row {
+    display: grid;
+    grid-template-columns: 24px 44px minmax(180px, 2fr) 100px minmax(120px, 1.5fr) 100px 110px;
+    align-items: center; gap: 18px;
+    padding: 14px 12px;
+    border-bottom: 1px solid var(--rule);
+    transition: background var(--motion-fast);
+    cursor: pointer;
+  }
+  .row:hover { background: var(--stone-raised); }
+  .row.selected { background: var(--brass-soft); }
+
+  .row-check {
+    width: 16px; height: 16px; border-radius: 4px;
+    border: 1.5px solid var(--rule); background: transparent;
+    cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center;
+  }
+  .row-check.checked { background: var(--ink); border-color: var(--ink); }
+  .row-check.checked svg { width: 11px; height: 11px; stroke: var(--stone); stroke-width: 2.5; fill: none; }
+
+  .row-avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 15px;
+    color: var(--stone);
+  }
+  .row-name { display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+  .row-name .n { font-size: 16px; font-weight: 600; color: var(--ink); letter-spacing: -0.018em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-name .e { font-size: 11.5px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+
+  .cat-chip { font-size: 10.5px; padding: 2px 8px; border-radius: 4px; background: var(--stone-sunken); color: var(--ink-muted); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; width: fit-content; }
+  .cat-chip.personal { background: var(--brass-soft); color: var(--brass-deep); }
+  .cat-chip.business { background: rgba(62,94,90,0.12); color: var(--av-5); }
+  .cat-chip.both { background: rgba(74,94,44,0.12); color: var(--av-10); }
+
+  .row-tags { display: flex; gap: 4px; flex-wrap: nowrap; overflow: hidden; }
+  .row-tag { font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: var(--stone-sunken); color: var(--ink-muted); font-weight: 500; white-space: nowrap; }
+
+  /* Freshness ring per row */
+  .row-fresh-ring { width: 36px; height: 36px; position: relative; justify-self: center; }
+  .row-fresh-ring svg { width: 36px; height: 36px; transform: rotate(-90deg); }
+  .row-fresh-ring .track { fill: none; stroke: var(--rule); stroke-width: 3; }
+  .row-fresh-ring .progress { fill: none; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 94.2; stroke-dashoffset: calc(94.2 - 94.2 * var(--p, 0.5)); }
+  .row-fresh-ring .num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .row-recency { font-size: 12.5px; color: var(--ink-muted); font-variant-numeric: tabular-nums; text-align: right; }
+  .row-recency.cold { color: var(--cold-red); font-weight: 600; }
+
+  .table-head {
+    display: grid;
+    grid-template-columns: 24px 44px minmax(180px, 2fr) 100px minmax(120px, 1.5fr) 100px 110px;
+    align-items: center; gap: 18px;
+    padding: 0 12px; height: 36px;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink-faint); font-weight: 600;
+    border-bottom: 1px solid var(--rule);
+  }
+  .table-head .right-align { text-align: right; }
+  .table-head .center-align { text-align: center; }
+
+  .mockup-label {
+    position: fixed; bottom: 12px; right: 16px; z-index: 100;
+    font-size: 11px; letter-spacing: 0.1em; font-weight: 500;
+    color: var(--ink-faint); background: var(--stone-raised);
+    border: 1px solid var(--rule); padding: 4px 10px; border-radius: 6px;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<div class="mockup-label">Contacts · Option B · Baseline</div>
+
+<header class="topbar">
+  <div class="brand">net-work</div>
+  <div class="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+    <input placeholder="Search contacts, tags, or notes" />
+    <span class="kbd">/</span>
+  </div>
+  <div class="top-utils">
+    <button>Theme · light</button>
+    <button>?</button>
+  </div>
+</header>
+
+<div class="shell">
+  <aside class="nav">
+    <a href="#" class="nav-link" title="This week"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></a>
+    <a href="#" class="nav-link active" title="Contacts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg></a>
+    <a href="#" class="nav-link" title="Triage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M9 12h6M9 8h6M9 16h4"/></svg></a>
+    <a href="#" class="nav-link" title="Merge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 4v6a4 4 0 0 0 4 4h6M17 14l-3-3m3 3-3 3"/></svg></a>
+    <a href="#" class="nav-link" title="Follow-ups"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 6h14M5 12h14M5 18h10"/></svg></a>
+    <div class="nav-spacer"></div>
+  </aside>
+
+  <div class="stage">
+    <!-- Filter sidebar -->
+    <aside class="filter-side">
+      <div class="filter-block">
+        <p class="filter-h">Status</p>
+        <div class="filter-list">
+          <a class="filter-link active">Kept <span class="count">412</span></a>
+          <a class="filter-link">To triage <span class="count">12</span></a>
+          <a class="filter-link">Skipped <span class="count">263</span></a>
+          <a class="filter-link">All <span class="count">699</span></a>
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <p class="filter-h">Category</p>
+        <div class="filter-list">
+          <a class="filter-link">Personal <span class="count">186</span></a>
+          <a class="filter-link">Business <span class="count">142</span></a>
+          <a class="filter-link">Both <span class="count">84</span></a>
+          <a class="filter-link">Uncategorized <span class="count">0</span></a>
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <p class="filter-h">Recency</p>
+        <div class="filter-list">
+          <a class="filter-link">&lt; 30 days <span class="count">38</span></a>
+          <a class="filter-link">30 – 90 days <span class="count">71</span></a>
+          <a class="filter-link">90 – 365 days <span class="count">198</span></a>
+          <a class="filter-link">365+ days <span class="count">105</span></a>
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <p class="filter-h">Tags</p>
+        <div class="tag-list">
+          <span class="tag-pill active">byu-volleyball</span>
+          <span class="tag-pill">cap13-lps</span>
+          <span class="tag-pill">portfolio</span>
+          <span class="tag-pill">college</span>
+          <span class="tag-pill">denver</span>
+          <span class="tag-pill">austin</span>
+          <span class="tag-pill">+ 14 more</span>
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <p class="filter-h">Source</p>
+        <div class="filter-list">
+          <a class="filter-link">Apple Contacts <span class="count">432</span></a>
+          <a class="filter-link">Google Contacts <span class="count">218</span></a>
+          <a class="filter-link">Gmail only <span class="count">87</span></a>
+          <a class="filter-link">LinkedIn CSV <span class="count">311</span></a>
+          <a class="filter-link">iMessage only <span class="count">42</span></a>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <div class="page-head">
+        <h1 class="page-title">Contacts</h1>
+        <p class="page-meta">412 kept · sorted by last contacted</p>
+      </div>
+
+      <div class="toolbar">
+        <span class="selected-count"><strong>3</strong> selected</span>
+        <button class="toolbar-btn">+ Add tag</button>
+        <button class="toolbar-btn primary">+ Add to this week</button>
+        <button class="toolbar-btn">Re-categorize</button>
+        <button class="toolbar-btn">Skip</button>
+        <div class="toolbar-spacer"></div>
+        <select class="toolbar-btn" style="cursor: pointer;">
+          <option>Sort: Last contacted</option>
+          <option>Sort: Name A→Z</option>
+          <option>Sort: Freshness</option>
+        </select>
+      </div>
+
+      <header class="table-head">
+        <div></div>
+        <div></div>
+        <div>Name</div>
+        <div>Category</div>
+        <div>Tags</div>
+        <div class="center-align">Fresh</div>
+        <div class="right-align">Last seen</div>
+      </header>
+
+      <div class="row selected">
+        <button class="row-check checked"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.5 3.5L13 5"/></svg></button>
+        <div class="row-avatar" style="background: var(--av-1);">SK</div>
+        <div class="row-name"><span class="n">Sarah Kauffman</span><span class="e">sarah.kauffman@gmail.com</span></div>
+        <div><span class="cat-chip personal">Personal</span></div>
+        <div class="row-tags"><span class="row-tag">byu-volleyball</span><span class="row-tag">denver</span></div>
+        <div class="row-fresh-ring" style="--p: 0.34;"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="progress" cx="18" cy="18" r="15" style="stroke: var(--fading-yellow);"/></svg><div class="num">34</div></div>
+        <div class="row-recency cold">253d</div>
+      </div>
+
+      <div class="row">
+        <button class="row-check"></button>
+        <div class="row-avatar" style="background: var(--av-2);">DC</div>
+        <div class="row-name"><span class="n">David Choe</span><span class="e">david.choe@protonmail.com</span></div>
+        <div><span class="cat-chip personal">Personal</span></div>
+        <div class="row-tags"><span class="row-tag">college</span></div>
+        <div class="row-fresh-ring" style="--p: 0.22;"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="progress" cx="18" cy="18" r="15" style="stroke: var(--cold-red);"/></svg><div class="num">22</div></div>
+        <div class="row-recency cold">412d</div>
+      </div>
+
+      <div class="row">
+        <button class="row-check"></button>
+        <div class="row-avatar" style="background: var(--av-3);">MV</div>
+        <div class="row-name"><span class="n">Marisol Vega</span><span class="e">marisol@vegacapital.com</span></div>
+        <div><span class="cat-chip both">Both</span></div>
+        <div class="row-tags"><span class="row-tag">cap13-lps</span><span class="row-tag">austin</span></div>
+        <div class="row-fresh-ring" style="--p: 0.64;"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="progress" cx="18" cy="18" r="15" style="stroke: var(--fresh-green);"/></svg><div class="num">64</div></div>
+        <div class="row-recency">18d</div>
+      </div>
+
+      <div class="row selected">
+        <button class="row-check checked"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.5 3.5L13 5"/></svg></button>
+        <div class="row-avatar" style="background: var(--av-4);">TH</div>
+        <div class="row-name"><span class="n">Tom Halloran</span><span class="e">tom@aerialimaging.io</span></div>
+        <div><span class="cat-chip business">Business</span></div>
+        <div class="row-tags"><span class="row-tag">portfolio</span><span class="row-tag">aerial-imaging</span></div>
+        <div class="row-fresh-ring" style="--p: 0.81;"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="progress" cx="18" cy="18" r="15" style="stroke: var(--fresh-green);"/></svg><div class="num">81</div></div>
+        <div class="row-recency">6d</div>
+      </div>
+
+      <div class="row selected">
+        <button class="row-check checked"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.5 3.5L13 5"/></svg></button>
+        <div class="row-avatar" style="background: var(--av-5);">PA</div>
+        <div class="row-name"><span class="n">Priya Anand</span><span class="e">priya@palomahealth.com</span></div>
+        <div><span class="cat-chip business">Business</span></div>
+        <div class="row-tags"><span class="row-tag">portfolio</span><span class="row-tag">paloma</span></div>
+        <div class="row-fresh-ring" style="--p: 0.41;"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="progress" cx="18" cy="18" r="15" style="stroke: var(--fading-yellow);"/></svg><div class="num">41</div></div>
+        <div class="row-recency">187d</div>
+      </div>
+
+      <div class="row">
+        <button class="row-check"></button>
+        <div class="row-avatar" style="background: var(--av-6);">JL</div>
+        <div class="row-name"><span class="n">Jonas Lindqvist</span><span class="e">jl@lindqvist.se</span></div>
+        <div><span class="cat-chip both">Both</span></div>
+        <div class="row-tags"><span class="row-tag">stockholm</span><span class="row-tag">family-office</span></div>
+        <div class="row-fresh-ring" style="--p: 0.58;"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="progress" cx="18" cy="18" r="15" style="stroke: var(--fading-yellow);"/></svg><div class="num">58</div></div>
+        <div class="row-recency">42d</div>
+      </div>
+
+      <div class="row">
+        <button class="row-check"></button>
+        <div class="row-avatar" style="background: var(--av-7);">EM</div>
+        <div class="row-name"><span class="n">Esther Mwangi</span><span class="e">e.mwangi@nairobi-vc.com</span></div>
+        <div><span class="cat-chip business">Business</span></div>
+        <div class="row-tags"><span class="row-tag">africa</span><span class="row-tag">nairobi</span></div>
+        <div class="row-fresh-ring" style="--p: 0.72;"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="progress" cx="18" cy="18" r="15" style="stroke: var(--fresh-green);"/></svg><div class="num">72</div></div>
+        <div class="row-recency">11d</div>
+      </div>
+
+      <div class="row">
+        <button class="row-check"></button>
+        <div class="row-avatar" style="background: var(--av-8);">RB</div>
+        <div class="row-name"><span class="n">Rebecca Beaumont</span><span class="e">rebecca@beaumont-law.com</span></div>
+        <div><span class="cat-chip business">Business</span></div>
+        <div class="row-tags"><span class="row-tag">cap13-counsel</span></div>
+        <div class="row-fresh-ring" style="--p: 0.67;"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="progress" cx="18" cy="18" r="15" style="stroke: var(--fresh-green);"/></svg><div class="num">67</div></div>
+        <div class="row-recency">21d</div>
+      </div>
+
+      <div class="row">
+        <button class="row-check"></button>
+        <div class="row-avatar" style="background: var(--av-9);">AK</div>
+        <div class="row-name"><span class="n">Aditya Kapoor</span><span class="e">+1 (415) 555-0188</span></div>
+        <div><span class="cat-chip personal">Personal</span></div>
+        <div class="row-tags"><span class="row-tag">byu-volleyball</span></div>
+        <div class="row-fresh-ring" style="--p: 0.31;"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="progress" cx="18" cy="18" r="15" style="stroke: var(--cold-red);"/></svg><div class="num">31</div></div>
+        <div class="row-recency cold">298d</div>
+      </div>
+
+      <div class="row">
+        <button class="row-check"></button>
+        <div class="row-avatar" style="background: var(--av-10);">NS</div>
+        <div class="row-name"><span class="n">Naomi Sutter-Akiyama</span><span class="e">naomi.sutter@gmail.com</span></div>
+        <div><span class="cat-chip personal">Personal</span></div>
+        <div class="row-tags"><span class="row-tag">portland</span><span class="row-tag">writing-group</span></div>
+        <div class="row-fresh-ring" style="--p: 0.49;"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="progress" cx="18" cy="18" r="15" style="stroke: var(--fading-yellow);"/></svg><div class="num">49</div></div>
+        <div class="row-recency">88d</div>
+      </div>
+
+      <div class="row">
+        <button class="row-check"></button>
+        <div class="row-avatar" style="background: var(--av-1);">DW</div>
+        <div class="row-name"><span class="n">Daniel Wexford</span><span class="e">dwexford@protonmail.com</span></div>
+        <div><span class="cat-chip business">Business</span></div>
+        <div class="row-tags"><span class="row-tag">marketplaces</span><span class="row-tag">consulting</span></div>
+        <div class="row-fresh-ring" style="--p: 0.42;"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="progress" cx="18" cy="18" r="15" style="stroke: var(--fading-yellow);"/></svg><div class="num">42</div></div>
+        <div class="row-recency">89d</div>
+      </div>
+
+      <div class="row">
+        <button class="row-check"></button>
+        <div class="row-avatar" style="background: var(--av-3);">RT</div>
+        <div class="row-name"><span class="n">Rebecca Thaler</span><span class="e">r.thaler@thaler-co.com</span></div>
+        <div><span class="cat-chip both">Both</span></div>
+        <div class="row-tags"><span class="row-tag">cap13-lps</span><span class="row-tag">nyc</span></div>
+        <div class="row-fresh-ring" style="--p: 0.55;"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="progress" cx="18" cy="18" r="15" style="stroke: var(--fading-yellow);"/></svg><div class="num">55</div></div>
+        <div class="row-recency">61d</div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+</body>
+</html>

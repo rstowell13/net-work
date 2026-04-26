@@ -1,0 +1,46 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Claude Code session state (kept local, not in git)
+.claude/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
+# Coverage / test artifacts
+coverage/
+.nyc_output/
+
+# Vercel
+.vercel/
+
+# Drizzle (keep schema.ts, ignore generated metadata if any)
+drizzle/
+
+# Mac agent
+03-build/mac-agent/.venv/
+03-build/mac-agent/__pycache__/
+03-build/mac-agent/state.json
+**/*.pyc
