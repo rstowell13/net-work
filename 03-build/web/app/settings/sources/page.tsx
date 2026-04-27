@@ -117,13 +117,8 @@ function SourceCard({
               Connect Google
             </a>
           )}
-          {isGoogle && status === "connected" && kind === "google_contacts" && (
-            <SyncButton sourceKind="google_contacts" />
-          )}
-          {isGoogle && status === "connected" && kind !== "google_contacts" && (
-            <span className="font-mono text-[11px]" style={{ color: "var(--ink-faint)" }}>
-              Sync coming next batch
-            </span>
+          {isGoogle && status === "connected" && (
+            <SyncButton sourceKind={kind} />
           )}
           {kind === "linkedin_csv" && <UploadCsvButton />}
           {isMac && (

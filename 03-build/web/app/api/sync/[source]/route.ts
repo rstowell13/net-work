@@ -9,10 +9,18 @@
  */
 import { NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
+
+// Sync work can take up to a minute on first run (Gmail header fetches
+// dominate). Vercel hobby tier allows 60s for serverless functions.
+export const maxDuration = 60;
+export const runtime = "nodejs";
+
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { sources } from "@/db/schema";
 import { syncGoogleContacts } from "@/lib/sync/google-contacts";
+import { syncGmail } from "@/lib/sync/gmail";
+import { syncGoogleCalendar } from "@/lib/sync/google-calendar";
 
 const SUPPORTED = new Set(["google_contacts", "gmail", "google_calendar"]);
 
@@ -54,13 +62,11 @@ export async function POST(
       result = await syncGoogleContacts(src.id);
       break;
     case "gmail":
+      result = await syncGmail(src.id);
+      break;
     case "google_calendar":
-      return NextResponse.json(
-        {
-          error: `${source} sync is not implemented yet — coming in the next batch`,
-        },
-        { status: 501 },
-      );
+      result = await syncGoogleCalendar(src.id);
+      break;
     default:
       return NextResponse.json({ error: "unreachable" }, { status: 500 });
   }
