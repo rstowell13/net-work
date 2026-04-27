@@ -9,6 +9,7 @@
  */
 import { AppShell } from "@/components/AppShell";
 import { SyncButton, UploadCsvButton } from "@/components/SourceActions";
+import { MacAgentCard } from "@/components/MacAgentCard";
 import { requireUser } from "@/lib/auth";
 import { getAllSourcesForUser, SOURCE_LABELS, type SourceKind, type SourceRow } from "@/lib/sources";
 
@@ -19,7 +20,6 @@ const ORDER: SourceKind[] = [
   "gmail",
   "google_calendar",
   "linkedin_csv",
-  "apple_contacts",
   "mac_agent",
 ];
 
@@ -29,7 +29,7 @@ const DESCRIPTIONS: Record<SourceKind, string> = {
   google_calendar: "All calendar events that include at least one external attendee.",
   linkedin_csv: "Upload your LinkedIn connections export (CSV) to add anyone Google doesn't already know about.",
   apple_contacts: "Read from your Mac's Contacts app via the Mac agent.",
-  mac_agent: "iMessage history and call logs read from your Mac. Installs as a one-line command.",
+  mac_agent: "Apple Contacts, iMessage history, and call logs from your Mac. One-line install; nightly auto-sync after that.",
 };
 
 function formatRelative(d: Date | null): string {
@@ -136,13 +136,20 @@ function SourceCard({
             <SyncButton sourceKind={kind} />
           )}
           {kind === "linkedin_csv" && <UploadCsvButton />}
-          {isMac && (
-            <span className="font-mono text-[11px]" style={{ color: "var(--ink-faint)" }}>
-              Milestone 3
-            </span>
-          )}
         </div>
       </div>
+
+      {kind === "mac_agent" && (
+        <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--rule)" }}>
+          <MacAgentCard
+            status={status}
+            lastSyncAt={row?.lastSyncAt ?? null}
+            lastSyncErrorPreview={
+              row?.lastSyncError ? row.lastSyncError.slice(0, 200) : null
+            }
+          />
+        </div>
+      )}
 
       {banner && (
         <p
