@@ -23,12 +23,26 @@ import {
 import { clientFromTokens } from "@/lib/google";
 import { runImport, type ImportCounters } from "./run";
 
-// Cap initial sync to keep ingest time bounded under Vercel's 60s function
-// limit. Robb can re-run for more — each subsequent sync is largely no-ops
-// thanks to ON CONFLICT.
-const MAX_THREADS = 600;
-const FETCH_CONCURRENCY = 10;
+// Each Sync now run pulls up to MAX_THREADS_PER_RUN older threads (or
+// brand-new ones since the last sync). This keeps every run under
+// Vercel's 60s function timeout. Subsequent clicks back-fill further.
+//
+// We bookmark progress in source.config:
+//   - oldest_synced_unix: oldest internalDate seen so far (seconds).
+//     Next backfill run uses `before:` to fetch older threads.
+//   - newest_synced_unix: newest internalDate seen so far (seconds).
+//     Future runs can use `after:` to pick up incremental new mail.
+const MAX_THREADS_PER_RUN = 800;
+const FETCH_CONCURRENCY = 20;
+const TIME_BUDGET_MS = 50_000; // bail out before Vercel kills us at 60s
 const HEADERS_TO_KEEP = ["From", "To", "Cc", "Subject", "Date", "Message-ID"];
+
+type GmailWatermark = {
+  oldest_synced_unix?: number;
+  newest_synced_unix?: number;
+  /** Set true once we've walked all the way back to the 2-year horizon. */
+  backfill_complete?: boolean;
+};
 
 // Pulls the user's own gmail address from the source.config.google_email,
 // used to classify each email as inbound or outbound.
@@ -79,18 +93,37 @@ export async function syncGmail(sourceId: string) {
       const auth = clientFromTokens(tok);
       const gmail = google.gmail({ version: "v1", auth });
       const selfEmail = await getSelfEmailFromSource(sourceId);
+      const watermark = await getWatermark(sourceId);
+      const t0 = Date.now();
+      let oldestSeenUnix: number | null = null;
+      let newestSeenUnix: number | null = null;
 
-      // Step 1 — list threads from the last 2 years (q-search).
-      const threadIds: string[] = [];
+      // Two-year cutoff
       const twoYearsAgo = new Date();
       twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-      const q = `after:${Math.floor(twoYearsAgo.getTime() / 1000)}`;
+      const twoYearsAgoUnix = Math.floor(twoYearsAgo.getTime() / 1000);
+
+      // Build the q-string. Strategy:
+      //  - First-time run (no watermark): just `after:<2y_ago>`.
+      //  - If backfill not complete: walk older — `after:<2y_ago> before:<oldest_synced>`.
+      //  - If backfill complete: just incremental — `after:<newest_synced>`.
+      let q: string;
+      if (watermark.backfill_complete && watermark.newest_synced_unix) {
+        q = `after:${watermark.newest_synced_unix}`;
+      } else if (watermark.oldest_synced_unix) {
+        q = `after:${twoYearsAgoUnix} before:${watermark.oldest_synced_unix}`;
+      } else {
+        q = `after:${twoYearsAgoUnix}`;
+      }
+
+      // Step 1 — list threads matching q, capped at MAX_THREADS_PER_RUN
+      const threadIds: string[] = [];
       let pageToken: string | undefined;
-      while (threadIds.length < MAX_THREADS) {
+      while (threadIds.length < MAX_THREADS_PER_RUN) {
         const res = await gmail.users.threads.list({
           userId: "me",
           q,
-          maxResults: Math.min(500, MAX_THREADS - threadIds.length),
+          maxResults: Math.min(500, MAX_THREADS_PER_RUN - threadIds.length),
           pageToken,
         });
         const ids = (res.data.threads ?? []).map((t) => t.id!).filter(Boolean);
@@ -99,9 +132,19 @@ export async function syncGmail(sourceId: string) {
         if (!pageToken) break;
       }
 
-      // Step 2 — fetch threads in parallel batches (Gmail API tolerates
-      // ~10 concurrent reads from a single user fine).
+      // If we got nothing AND we were doing a backfill, mark it complete.
+      if (threadIds.length === 0 && !watermark.backfill_complete) {
+        await setWatermark(sourceId, { ...watermark, backfill_complete: true });
+        return;
+      }
+
+      // Step 2 — fetch threads in parallel batches.
+      let bailedEarly = false;
       for (let i = 0; i < threadIds.length; i += FETCH_CONCURRENCY) {
+        if (Date.now() - t0 > TIME_BUDGET_MS) {
+          bailedEarly = true;
+          break;
+        }
         const batch = threadIds.slice(i, i + FETCH_CONCURRENCY);
         const fetched = await Promise.all(
           batch.map((tid) =>
@@ -134,6 +177,12 @@ export async function syncGmail(sourceId: string) {
           if (sentTimes.length === 0) continue;
           const startedAt = new Date(Math.min(...sentTimes));
           const endedAt = new Date(Math.max(...sentTimes));
+
+          // Track watermarks (in unix seconds)
+          const oldestMsUnix = Math.floor(Math.min(...sentTimes) / 1000);
+          const newestMsUnix = Math.floor(Math.max(...sentTimes) / 1000);
+          oldestSeenUnix = oldestSeenUnix === null ? oldestMsUnix : Math.min(oldestSeenUnix, oldestMsUnix);
+          newestSeenUnix = newestSeenUnix === null ? newestMsUnix : Math.max(newestSeenUnix, newestMsUnix);
 
           // Upsert the thread
           const threadRows = await db
@@ -257,8 +306,56 @@ export async function syncGmail(sourceId: string) {
           }
         } // end inner for (const entry of fetched)
       } // end outer for (concurrency batches)
+
+      // Persist watermark for the next run.
+      const newWatermark: GmailWatermark = { ...watermark };
+      if (oldestSeenUnix !== null) {
+        newWatermark.oldest_synced_unix = Math.min(
+          watermark.oldest_synced_unix ?? Number.POSITIVE_INFINITY,
+          oldestSeenUnix,
+        );
+      }
+      if (newestSeenUnix !== null) {
+        newWatermark.newest_synced_unix = Math.max(
+          watermark.newest_synced_unix ?? 0,
+          newestSeenUnix,
+        );
+      }
+      // If we got fewer threads than the cap AND we weren't bailed by the
+      // time budget, we've reached the 2-year horizon.
+      if (
+        !bailedEarly &&
+        threadIds.length < MAX_THREADS_PER_RUN &&
+        !watermark.backfill_complete
+      ) {
+        newWatermark.backfill_complete = true;
+      }
+      await setWatermark(sourceId, newWatermark);
     },
   });
+}
+
+async function getWatermark(sourceId: string): Promise<GmailWatermark> {
+  const [src] = await db
+    .select({ config: sources.config })
+    .from(sources)
+    .where(eq(sources.id, sourceId))
+    .limit(1);
+  return ((src?.config ?? {}) as GmailWatermark) ?? {};
+}
+
+async function setWatermark(sourceId: string, w: GmailWatermark) {
+  // Merge into existing config (preserves google_email)
+  const [src] = await db
+    .select({ config: sources.config })
+    .from(sources)
+    .where(eq(sources.id, sourceId))
+    .limit(1);
+  const merged = { ...(src?.config ?? {}), ...w };
+  await db
+    .update(sources)
+    .set({ config: merged, updatedAt: new Date() })
+    .where(eq(sources.id, sourceId));
 }
 
 // Parse a header like '"Sarah K." <sarah@example.com>, jane@example.com' into
