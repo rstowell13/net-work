@@ -98,34 +98,35 @@ export async function syncGmail(sourceId: string) {
       let oldestSeenUnix: number | null = null;
       let newestSeenUnix: number | null = null;
 
-      // Two-year cutoff
-      const twoYearsAgo = new Date();
-      twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-      const twoYearsAgoUnix = Math.floor(twoYearsAgo.getTime() / 1000);
-
-      // Build the q-string. Strategy:
-      //  - First-time run (no watermark): just `after:<2y_ago>`.
-      //  - If backfill not complete: walk older — `after:<2y_ago> before:<oldest_synced>`.
-      //  - If backfill complete: just incremental — `after:<newest_synced>`.
+      // All-time backfill — no time floor. Strategy:
+      //  - First-time run (no watermark): no q filter (oldest first via paging).
+      //  - Backfill not complete: walk older — `before:<oldest_synced>`.
+      //  - Backfill complete: incremental — `after:<newest_synced>`.
       let q: string;
       if (watermark.backfill_complete && watermark.newest_synced_unix) {
         q = `after:${watermark.newest_synced_unix}`;
       } else if (watermark.oldest_synced_unix) {
-        q = `after:${twoYearsAgoUnix} before:${watermark.oldest_synced_unix}`;
+        q = `before:${watermark.oldest_synced_unix}`;
       } else {
-        q = `after:${twoYearsAgoUnix}`;
+        q = ""; // no filter on first run
       }
 
       // Step 1 — list threads matching q, capped at MAX_THREADS_PER_RUN
       const threadIds: string[] = [];
       let pageToken: string | undefined;
       while (threadIds.length < MAX_THREADS_PER_RUN) {
-        const res = await gmail.users.threads.list({
+        const listParams: {
+          userId: string;
+          maxResults: number;
+          pageToken?: string;
+          q?: string;
+        } = {
           userId: "me",
-          q,
           maxResults: Math.min(500, MAX_THREADS_PER_RUN - threadIds.length),
           pageToken,
-        });
+        };
+        if (q) listParams.q = q;
+        const res = await gmail.users.threads.list(listParams);
         const ids = (res.data.threads ?? []).map((t) => t.id!).filter(Boolean);
         threadIds.push(...ids);
         pageToken = res.data.nextPageToken ?? undefined;

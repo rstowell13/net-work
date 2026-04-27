@@ -25,8 +25,8 @@ const ORDER: SourceKind[] = [
 
 const DESCRIPTIONS: Record<SourceKind, string> = {
   google_contacts: "Names, phone numbers, emails, photos, and any LinkedIn URLs you've stored on a contact in Google.",
-  gmail: "Last 2 years of email threads — From / To / Subject / Date plus a short body preview.",
-  google_calendar: "Last 2 years of events that include at least one matched contact.",
+  gmail: "All email threads — From / To / Subject / Date plus a short body preview. Click Sync now repeatedly to backfill older threads.",
+  google_calendar: "All calendar events that include at least one external attendee.",
   linkedin_csv: "Upload your LinkedIn connections export (CSV) to add anyone Google doesn't already know about.",
   apple_contacts: "Read from your Mac's Contacts app via the Mac agent.",
   mac_agent: "iMessage history and call logs read from your Mac. Installs as a one-line command.",
