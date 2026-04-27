@@ -8,6 +8,13 @@
       "when": 1777244058230,
       "tag": "0000_tiresome_jocasta",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777267106133,
+      "tag": "0001_magenta_mandroid",
+      "breakpoints": true
     }
   ]
 }

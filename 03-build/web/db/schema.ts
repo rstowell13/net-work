@@ -452,9 +452,12 @@ export const messageThreads = pgTable(
   "message_threads",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    contactId: uuid("contact_id")
-      .notNull()
-      .references(() => contacts.id, { onDelete: "cascade" }),
+    // Nullable until the post-merge linking step runs (M4): ingestion
+    // creates threads before Contacts exist, so we can't enforce the FK at
+    // insert time. After merge, we walk participating raw_contacts → contact.
+    contactId: uuid("contact_id").references(() => contacts.id, {
+      onDelete: "set null",
+    }),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     endedAt: timestamp("ended_at", { withTimezone: true }).notNull(),
     messageCount: integer("message_count").notNull().default(0),
@@ -509,9 +512,10 @@ export const emailThreads = pgTable(
   "email_threads",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    contactId: uuid("contact_id")
-      .notNull()
-      .references(() => contacts.id, { onDelete: "cascade" }),
+    // Nullable until the post-merge linking step runs (M4) — see message_threads.
+    contactId: uuid("contact_id").references(() => contacts.id, {
+      onDelete: "set null",
+    }),
     externalThreadId: text("external_thread_id").notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     endedAt: timestamp("ended_at", { withTimezone: true }).notNull(),
@@ -593,9 +597,10 @@ export const calendarEvents = pgTable(
   "calendar_events",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    contactId: uuid("contact_id")
-      .notNull()
-      .references(() => contacts.id, { onDelete: "cascade" }),
+    // Nullable until post-merge linking — see message_threads.
+    contactId: uuid("contact_id").references(() => contacts.id, {
+      onDelete: "set null",
+    }),
     externalId: text("external_id").notNull(),
     title: text("title").notNull(),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
@@ -607,8 +612,10 @@ export const calendarEvents = pgTable(
       .defaultNow(),
   },
   (t) => ({
-    uniqContactExternal: uniqueIndex("calendar_events_contact_external_uniq").on(
-      t.contactId,
+    // Unique on externalId alone — Google Calendar event IDs are globally
+    // unique across the user's calendar, and contactId may be null at
+    // ingest time.
+    uniqExternal: uniqueIndex("calendar_events_external_uniq").on(
       t.externalId,
     ),
   }),

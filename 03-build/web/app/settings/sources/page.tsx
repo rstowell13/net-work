@@ -8,6 +8,7 @@
  * Visual contract: derived from the AppShell + design tokens.
  */
 import { AppShell } from "@/components/AppShell";
+import { SyncButton, UploadCsvButton } from "@/components/SourceActions";
 import { requireUser } from "@/lib/auth";
 import { getAllSourcesForUser, SOURCE_LABELS, type SourceKind, type SourceRow } from "@/lib/sources";
 
@@ -116,28 +117,15 @@ function SourceCard({
               Connect Google
             </a>
           )}
-          {isGoogle && status === "connected" && (
-            <>
-              <button
-                disabled
-                className="rounded-[7px] border px-3 py-[6px] text-[12.5px] font-medium opacity-60"
-                style={{ borderColor: "var(--rule)", color: "var(--ink-muted)" }}
-                title="Coming next"
-              >
-                Sync now
-              </button>
-            </>
+          {isGoogle && status === "connected" && kind === "google_contacts" && (
+            <SyncButton sourceKind="google_contacts" />
           )}
-          {kind === "linkedin_csv" && (
-            <button
-              disabled
-              className="rounded-[7px] border px-3 py-[6px] text-[12.5px] font-medium opacity-60"
-              style={{ borderColor: "var(--rule)", color: "var(--ink-muted)" }}
-              title="Coming next"
-            >
-              Upload CSV
-            </button>
+          {isGoogle && status === "connected" && kind !== "google_contacts" && (
+            <span className="font-mono text-[11px]" style={{ color: "var(--ink-faint)" }}>
+              Sync coming next batch
+            </span>
           )}
+          {kind === "linkedin_csv" && <UploadCsvButton />}
           {isMac && (
             <span className="font-mono text-[11px]" style={{ color: "var(--ink-faint)" }}>
               Milestone 3
