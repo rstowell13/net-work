@@ -32,9 +32,17 @@ import { runImport, type ImportCounters } from "./run";
 //     Next backfill run uses `before:` to fetch older threads.
 //   - newest_synced_unix: newest internalDate seen so far (seconds).
 //     Future runs can use `after:` to pick up incremental new mail.
-const MAX_THREADS_PER_RUN = 800;
-const FETCH_CONCURRENCY = 20;
+const MAX_THREADS_PER_RUN = 600;
+const FETCH_CONCURRENCY = 10;
 const TIME_BUDGET_MS = 50_000; // bail out before Vercel kills us at 60s
+
+// Gmail's per-user-per-minute quota is ~250 quota units; threads.get costs 5
+// each. We back off gracefully on 429s instead of treating them as failures.
+function isQuotaError(err: unknown): boolean {
+  const msg =
+    err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  return /quota|rate|exceeded|429/i.test(msg);
+}
 const HEADERS_TO_KEEP = ["From", "To", "Cc", "Subject", "Date", "Message-ID"];
 
 type GmailWatermark = {
@@ -114,6 +122,7 @@ export async function syncGmail(sourceId: string) {
       // Step 1 — list threads matching q, capped at MAX_THREADS_PER_RUN
       const threadIds: string[] = [];
       let pageToken: string | undefined;
+      let quotaTripped = false;
       while (threadIds.length < MAX_THREADS_PER_RUN) {
         const listParams: {
           userId: string;
@@ -126,11 +135,19 @@ export async function syncGmail(sourceId: string) {
           pageToken,
         };
         if (q) listParams.q = q;
-        const res = await gmail.users.threads.list(listParams);
-        const ids = (res.data.threads ?? []).map((t) => t.id!).filter(Boolean);
-        threadIds.push(...ids);
-        pageToken = res.data.nextPageToken ?? undefined;
-        if (!pageToken) break;
+        try {
+          const res = await gmail.users.threads.list(listParams);
+          const ids = (res.data.threads ?? []).map((t) => t.id!).filter(Boolean);
+          threadIds.push(...ids);
+          pageToken = res.data.nextPageToken ?? undefined;
+          if (!pageToken) break;
+        } catch (err) {
+          if (isQuotaError(err)) {
+            quotaTripped = true;
+            break;
+          }
+          throw err; // anything else is a real failure
+        }
       }
 
       // If we got nothing AND we were doing a backfill, mark it complete.
@@ -140,8 +157,9 @@ export async function syncGmail(sourceId: string) {
       }
 
       // Step 2 — fetch threads in parallel batches.
-      let bailedEarly = false;
+      let bailedEarly = quotaTripped;
       for (let i = 0; i < threadIds.length; i += FETCH_CONCURRENCY) {
+        if (bailedEarly) break;
         if (Date.now() - t0 > TIME_BUDGET_MS) {
           bailedEarly = true;
           break;
@@ -158,6 +176,10 @@ export async function syncGmail(sourceId: string) {
               })
               .then((r) => ({ tid, t: r }))
               .catch((e) => {
+                if (isQuotaError(e)) {
+                  bailedEarly = true; // signal outer loop to stop
+                  return null;
+                }
                 console.error("gmail thread fetch error", tid, e);
                 return null;
               }),

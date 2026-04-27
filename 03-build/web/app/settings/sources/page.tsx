@@ -108,7 +108,13 @@ function SourceCard({
 
         {/* Action buttons per kind */}
         <div className="flex items-center gap-2">
-          {isGoogle && status !== "connected" && (
+          {/*
+            Show Sync now when status is connected OR error (the source is
+            still wired up — error usually means a transient quota/network
+            blip that retrying clears). Show Connect Google only when
+            we've never connected or need re-auth from scratch.
+          */}
+          {isGoogle && status === "not_connected" && (
             <a
               href="/api/auth/google/start"
               className="rounded-[7px] px-4 py-[7px] text-[13px] font-medium transition-colors"
@@ -117,7 +123,16 @@ function SourceCard({
               Connect Google
             </a>
           )}
-          {isGoogle && status === "connected" && (
+          {isGoogle && status === "needs_reauth" && (
+            <a
+              href="/api/auth/google/start"
+              className="rounded-[7px] px-4 py-[7px] text-[13px] font-medium"
+              style={{ background: "var(--ink)", color: "var(--stone)" }}
+            >
+              Reconnect Google
+            </a>
+          )}
+          {isGoogle && (status === "connected" || status === "error") && (
             <SyncButton sourceKind={kind} />
           )}
           {kind === "linkedin_csv" && <UploadCsvButton />}
