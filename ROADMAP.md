@@ -35,9 +35,9 @@ Before code can begin. I'll guide him through each on day 1.
 
 ## Project state
 
-- **Current phase:** Phase 4 (Build) — Milestone 1 complete; starting M2.
+- **Current phase:** Phase 4 (Build) — Milestones 1–2 complete; starting M3 (Mac agent).
 - **Last updated:** 2026-04-27.
-- **Next action:** Begin Milestone 2 — web-side OAuth ingestion (Google Contacts, Gmail, Calendar) + LinkedIn CSV upload.
+- **Next action:** Begin Milestone 3 — Mac-side agent for Apple Contacts + iMessage + Call History ingestion.
 
 ---
 
@@ -128,17 +128,17 @@ Before code can begin. I'll guide him through each on day 1.
 
 ### Tasks
 
-- [ ] **2.1 Build `/settings` and `/settings/sources` pages** matching the design system. Cards for each source with status / last-sync / connect-disconnect / manual-sync.
-- [ ] **2.2 Implement Google OAuth flow** — single auth code grants access to Contacts + Gmail readonly + Calendar readonly scopes. Tokens stored encrypted in `OAuthToken`.
-- [ ] **2.3 Sync Google Contacts** — paginate the People API, normalize names/emails/phones/photo URL/LinkedIn URL (if present in custom field), upsert RawContact rows by `external_id`.
-- [ ] **2.4 Sync Gmail headers** — query last 2 years of threads, per-thread store From/To/Cc/Subject/Date and a 2KB body preview. RawContacts created from any new email addresses encountered. Email + EmailThread rows populated.
-- [ ] **2.5 Sync Google Calendar** — query last 2 years of events with attendees. CalendarEvent rows created and linked to existing RawContacts by attendee email; events with no matched contact are skipped.
-- [ ] **2.6 LinkedIn CSV uploader** — parse the standard LinkedIn export format (First, Last, Email, Company, Position, Connected On, URL). Each row → RawContact with `source_id` = LinkedIn. Show parse errors with line numbers in the UI.
-- [ ] **2.7 ImportRun tracking** — wrap each sync in an `ImportRun` row capturing started_at / finished_at / records_seen / errors. Surface last-sync time on `/settings/sources`.
-- [ ] **2.8 Manual sync button** per source. Calls `POST /api/sync/[source]`.
-- [ ] **2.9 Token refresh** logic — when a Google token expires, refresh and retry; if refresh fails, mark source `needs_reauth`.
-- [ ] **2.10 Smoke test on real data.** Robb connects his real Google account; ingest at least 200 contacts and 1000 emails. Confirm RawContact / Email / EmailThread / CalendarEvent rows look right via direct DB query.
-- [ ] **2.11 Commit + tag `m2-web-ingest`.**
+- [x] **2.1 Build `/settings` and `/settings/sources` pages** matching the design system. Cards for each source with status / last-sync / connect-disconnect / manual-sync.
+- [x] **2.2 Implement Google OAuth flow** — single auth code grants access to Contacts + Gmail readonly + Calendar readonly scopes. Tokens stored encrypted in `OAuthToken`.
+- [x] **2.3 Sync Google Contacts** — paginate the People API, normalize names/emails/phones/photo URL/LinkedIn URL (if present in custom field), upsert RawContact rows by `external_id`.
+- [x] **2.4 Sync Gmail headers** — query last 2 years of threads, per-thread store From/To/Cc/Subject/Date and a 2KB body preview. RawContacts created from any new email addresses encountered. Email + EmailThread rows populated.
+- [x] **2.5 Sync Google Calendar** — query last 2 years of events with attendees. CalendarEvent rows created and linked to existing RawContacts by attendee email; events with no matched contact are skipped.
+- [x] **2.6 LinkedIn CSV uploader** — parse the standard LinkedIn export format (First, Last, Email, Company, Position, Connected On, URL). Each row → RawContact with `source_id` = LinkedIn. Show parse errors with line numbers in the UI.
+- [x] **2.7 ImportRun tracking** — wrap each sync in an `ImportRun` row capturing started_at / finished_at / records_seen / errors. Surface last-sync time on `/settings/sources`.
+- [x] **2.8 Manual sync button** per source. Calls `POST /api/sync/[source]`.
+- [x] **2.9 Token refresh** logic — when a Google token expires, refresh and retry; if refresh fails, mark source `needs_reauth`.
+- [x] **2.10 Smoke test on real data.** Robb connects his real Google account; ingest at least 200 contacts and 1000 emails. Confirm RawContact / Email / EmailThread / CalendarEvent rows look right via direct DB query.
+- [x] **2.11 Commit + tag `m2-web-ingest`.**
 
 **Verification:** `/settings/sources` shows 4 connected sources with realistic record counts. RawContact has hundreds of rows. No raw email *bodies* are stored yet beyond a 2KB preview.
 
