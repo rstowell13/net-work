@@ -24,20 +24,20 @@
 
 Before code can begin. I'll guide him through each on day 1.
 
-- [ ] **Vercel account** — Robb signs in with GitHub.
-- [ ] **Supabase project** — created free tier; Robb provides project URL + anon key + service role key.
-- [ ] **Google Cloud project** with OAuth client (Web app type) — for Google Contacts / Gmail / Calendar OAuth. Redirect URI: `https://<vercel-url>/api/auth/google/callback`.
-- [ ] **OpenRouter API key** (sign-in via GitHub at openrouter.ai, top up $5 credit — at v1 volume that lasts months).
-- [ ] **GitHub repo** initialized; Robb invites Vercel.
-- [ ] **`.env.local`** populated locally with all the above.
+- [x] **Vercel account** — Robb signs in with GitHub.
+- [x] **Supabase project** — created free tier; Robb provides project URL + anon key + service role key.
+- [x] **Google Cloud project** with OAuth client (Web app type) — for Google Contacts / Gmail / Calendar OAuth. Redirect URI: `https://<vercel-url>/api/auth/google/callback`.
+- [x] **OpenRouter API key** (sign-in via GitHub at openrouter.ai, top up $5 credit — at v1 volume that lasts months).
+- [x] **GitHub repo** initialized; Robb invites Vercel.
+- [x] **`.env.local`** populated locally with all the above.
 
 ---
 
 ## Project state
 
-- **Current phase:** Phase 4 (Build).
-- **Last updated:** 2026-04-25.
-- **Next action:** Robb approves ROADMAP at Gate 4. Then I create a worktree and begin Milestone 1.
+- **Current phase:** Phase 4 (Build) — Milestone 1 complete; starting M2.
+- **Last updated:** 2026-04-27.
+- **Next action:** Begin Milestone 2 — web-side OAuth ingestion (Google Contacts, Gmail, Calendar) + LinkedIn CSV upload.
 
 ---
 
@@ -90,19 +90,19 @@ Before code can begin. I'll guide him through each on day 1.
 
 ### Tasks
 
-- [ ] **1.1 Initialize Next.js + TypeScript + Tailwind v4** in `03-build/web/`. Add Geist, Source Serif 4, JetBrains Mono via `next/font/google`. Run `pnpm dev` locally to confirm it serves a blank page.
-- [ ] **1.2 Port design tokens.** Translate the OKLCH/hex palette, freshness traffic-light tokens, 10 avatar colors, type scale, motion tokens from `02-design/DESIGN_SYSTEM.md` into `lib/design-tokens.ts` as exported TS constants AND into `app/globals.css` as `:root` CSS custom properties. Both light and dark variants. Confirm against the locked mockups.
-- [ ] **1.3 Build the AppShell components** (`AppShell.tsx`, `TopBar.tsx`, `IconNav.tsx`) lifted directly from the locked `home/chosen.html` markup — full-width search bar topbar, 64px icon rail with This-week/Contacts/Triage/Merge/Follow-ups + Settings. Click-through to placeholder pages.
-- [ ] **1.4 Set up Supabase project.** Robb creates project, gives URL + keys; I write them into `.env.example` as placeholders.
-- [ ] **1.5 Set up Drizzle ORM.** Install `drizzle-orm`, `drizzle-kit`, `postgres`. Create `lib/db.ts`.
-- [ ] **1.6 Write the full schema** in `db/schema.ts` — every entity from `01-spec/DATA_MODEL.md`: User, Session, Source, OAuthToken, AgentToken, ImportRun, RawContact, Contact, MergeCandidate, Tag, ContactTag, FollowUp, Note, Message, MessageThread, Email, EmailThread, CallLog, CalendarEvent, RelationshipSummary, Score, ScoreHistory, WeeklyPlan, WeeklyPlanItem, CadenceRules, TagCadenceRule, SuggestionState. Include all enums, FKs, indexes, soft-delete columns. Encrypt OAuth/agent tokens via `pgcrypto` extension.
-- [ ] **1.7 Generate and run the initial migration** against the Supabase Postgres. Confirm via `psql` that all tables exist.
-- [ ] **1.8 Implement magic-link auth** with Supabase. `app/login/page.tsx` shows email input + "Send link" button styled per design system. Callback route at `app/api/auth/callback/route.ts`. `middleware.ts` redirects unauthenticated users to `/login`.
-- [ ] **1.9 Bootstrap the User row.** On first sign-in for Robb's email, create a User record with `timezone: 'America/Los_Angeles'`. Hard-fail any email that isn't his (single-user enforcement).
-- [ ] **1.10 Build empty-state Home page** at `app/page.tsx` — the State A "no plan committed" empty state from `home/chosen.html`. Hardcoded greeting + "Connect a data source →" CTA. Verify it visually matches the chosen mockup (using only the design tokens, no inline colors).
-- [ ] **1.11 Deploy to Vercel.** Connect repo, set env vars, deploy. Confirm production URL serves the login page.
-- [ ] **1.12 End-to-end smoke test.** Robb signs in via magic link in production → lands on Home empty state → page passes a visual diff against `home/chosen.html` (eyeballed, not pixel-perfect).
-- [ ] **1.13 Commit + tag `m1-scaffolding`.**
+- [x] **1.1 Initialize Next.js + TypeScript + Tailwind v4** in `03-build/web/`. Add Geist, Source Serif 4, JetBrains Mono via `next/font/google`. Run `pnpm dev` locally to confirm it serves a blank page.
+- [x] **1.2 Port design tokens.** Translate the OKLCH/hex palette, freshness traffic-light tokens, 10 avatar colors, type scale, motion tokens from `02-design/DESIGN_SYSTEM.md` into `lib/design-tokens.ts` as exported TS constants AND into `app/globals.css` as `:root` CSS custom properties. Both light and dark variants. Confirm against the locked mockups.
+- [x] **1.3 Build the AppShell components** (`AppShell.tsx`, `TopBar.tsx`, `IconNav.tsx`) lifted directly from the locked `home/chosen.html` markup — full-width search bar topbar, 64px icon rail with This-week/Contacts/Triage/Merge/Follow-ups + Settings. Click-through to placeholder pages.
+- [x] **1.4 Set up Supabase project.** Robb creates project, gives URL + keys; I write them into `.env.example` as placeholders.
+- [x] **1.5 Set up Drizzle ORM.** Install `drizzle-orm`, `drizzle-kit`, `postgres`. Create `lib/db.ts`.
+- [x] **1.6 Write the full schema** in `db/schema.ts` — every entity from `01-spec/DATA_MODEL.md`: User, Session, Source, OAuthToken, AgentToken, ImportRun, RawContact, Contact, MergeCandidate, Tag, ContactTag, FollowUp, Note, Message, MessageThread, Email, EmailThread, CallLog, CalendarEvent, RelationshipSummary, Score, ScoreHistory, WeeklyPlan, WeeklyPlanItem, CadenceRules, TagCadenceRule, SuggestionState. Include all enums, FKs, indexes, soft-delete columns. Encrypt OAuth/agent tokens via `pgcrypto` extension.
+- [x] **1.7 Generate and run the initial migration** against the Supabase Postgres. Confirm via `psql` that all tables exist.
+- [x] **1.8 Implement magic-link auth** with Supabase. `app/login/page.tsx` shows email input + "Send link" button styled per design system. Callback route at `app/api/auth/callback/route.ts`. `middleware.ts` redirects unauthenticated users to `/login`.
+- [x] **1.9 Bootstrap the User row.** On first sign-in for Robb's email, create a User record with `timezone: 'America/Los_Angeles'`. Hard-fail any email that isn't his (single-user enforcement).
+- [x] **1.10 Build empty-state Home page** at `app/page.tsx` — the State A "no plan committed" empty state from `home/chosen.html`. Hardcoded greeting + "Connect a data source →" CTA. Verify it visually matches the chosen mockup (using only the design tokens, no inline colors).
+- [x] **1.11 Deploy to Vercel.** Connect repo, set env vars, deploy. Confirm production URL serves the login page.
+- [x] **1.12 End-to-end smoke test.** Robb signs in via magic link in production → lands on Home empty state → page passes a visual diff against `home/chosen.html` (eyeballed, not pixel-perfect).
+- [x] **1.13 Commit + tag `m1-scaffolding`.**
 
 **Verification:** Robb can log into the production app, navigates pages via the icon rail (other pages still placeholder), Home looks like the chosen mockup. DB has every table. Magic-link auth works.
 
