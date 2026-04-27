@@ -53,14 +53,11 @@ export async function syncGoogleCalendar(sourceId: string) {
       const cal = google.calendar({ version: "v3", auth });
       const selfEmail = await getSelfEmailFromSource(sourceId);
 
-      const twoYearsAgo = new Date();
-      twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-
+      // All-time backfill — no timeMin floor.
       let pageToken: string | undefined;
       do {
         const res = await cal.events.list({
           calendarId: "primary",
-          timeMin: twoYearsAgo.toISOString(),
           maxResults: 2500,
           singleEvents: true,
           orderBy: "startTime",
