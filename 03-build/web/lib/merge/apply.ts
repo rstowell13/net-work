@@ -7,6 +7,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { normalizeRaw } from "./normalize";
 import { classify } from "./confidence";
+import { relinkContact } from "@/lib/relink";
 
 // Higher = preferred for canonical fields.
 const SOURCE_PRIORITY: Record<string, number> = {
@@ -129,6 +130,13 @@ export async function applyCandidate(
       })
       .where(eq(schema.mergeCandidates.id, candidateId));
     return c.id;
+  });
+
+  // Stamp diary tables (messages, emails, calls, calendar) with the new
+  // contactId. Cheap per-contact and runs outside the transaction so a
+  // relink failure doesn't unwind the merge.
+  await relinkContact(contactId).catch((err) => {
+    console.error(`relink failed for contact ${contactId}:`, err);
   });
 
   return { contactId };

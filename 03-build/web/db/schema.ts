@@ -458,6 +458,10 @@ export const messageThreads = pgTable(
     contactId: uuid("contact_id").references(() => contacts.id, {
       onDelete: "set null",
     }),
+    // Phone or email handle from the mac_agent — matches raw_contacts.phones/emails
+    // for post-merge relinking. Populated at ingest time.
+    handle: text("handle"),
+    externalThreadId: text("external_thread_id"),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     endedAt: timestamp("ended_at", { withTimezone: true }).notNull(),
     messageCount: integer("message_count").notNull().default(0),
@@ -477,6 +481,10 @@ export const messageThreads = pgTable(
       t.contactId,
       t.endedAt,
     ),
+    uniqExternalThread: uniqueIndex("message_threads_external_uniq").on(
+      t.externalThreadId,
+    ),
+    handleIdx: index("message_threads_handle_idx").on(t.handle),
   }),
 );
 
@@ -577,6 +585,9 @@ export const callLogs = pgTable(
       onDelete: "set null",
     }),
     externalId: text("external_id").notNull(),
+    // Phone handle from the mac_agent — matches raw_contacts.phones for
+    // post-merge relinking.
+    handle: text("handle"),
     direction: callDirectionEnum("direction").notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     durationSeconds: integer("duration_seconds").notNull().default(0),
@@ -590,6 +601,7 @@ export const callLogs = pgTable(
       t.contactId,
       t.startedAt,
     ),
+    handleIdx: index("call_logs_handle_idx").on(t.handle),
   }),
 );
 

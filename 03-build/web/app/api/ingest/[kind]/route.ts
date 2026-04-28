@@ -10,7 +10,7 @@
  * Refs: ROADMAP M3.6
  */
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   rawContacts,
@@ -212,29 +212,31 @@ async function ingestMessages(
     if (upserted[0]) handleToRawId.set(handle, upserted[0].id);
   }
 
-  // Step 2: upsert MessageThreads (no contactId yet — populated post-merge)
+  // Step 2: upsert MessageThreads (no contactId yet — populated post-merge
+  // by lib/relink.ts). Dedupe by external_thread_id.
   const threadIdMap = new Map<string, string>(); // external_thread_id -> uuid
   for (const t of threadMap.values()) {
     const startedAt = new Date(t.started_at_ms);
     const endedAt = new Date(t.ended_at_ms);
-    // We don't have a unique index on external_thread_id for message_threads;
-    // dedupe by checking existence first.
-    const existing = await db
-      .select({ id: messageThreads.id })
-      .from(messageThreads)
-      .where(eq(messageThreads.id, messageThreads.id)) // placeholder
-      .limit(0);
-    void existing; // unused — see note below
-    // Insert; if you re-run for existing thread the dedupe is via the
-    // (handle, started_at_ms) signature which we don't enforce. For v1
-    // we accept potential duplicate thread rows on heavy re-syncs and
-    // resolve in the post-merge linking step. ON CONFLICT not applicable.
+    const handle = t.handle ?? null;
     const inserted = await db
       .insert(messageThreads)
       .values({
+        externalThreadId: t.external_thread_id,
+        handle,
         startedAt,
         endedAt,
         messageCount: t.message_count,
+      })
+      .onConflictDoUpdate({
+        target: messageThreads.externalThreadId,
+        set: {
+          handle,
+          startedAt,
+          endedAt,
+          messageCount: t.message_count,
+          updatedAt: new Date(),
+        },
       })
       .returning({ id: messageThreads.id });
     threadIdMap.set(t.external_thread_id, inserted[0].id);
@@ -283,25 +285,29 @@ async function ingestCalls(
   batch: CallRow[],
   counters: { recordsSeen: number; recordsNew: number; recordsUpdated: number },
 ) {
-  for (const c of batch) {
-    counters.recordsSeen += 1;
-    if (!c.external_id) continue;
-    await db
-      .insert(callLogs)
-      .values({
-        externalId: c.external_id,
-        direction: c.direction,
-        startedAt: new Date(c.started_at_ms),
-        durationSeconds: c.duration_seconds,
-      })
-      .onConflictDoUpdate({
-        target: callLogs.externalId,
-        set: {
-          direction: c.direction,
-          startedAt: new Date(c.started_at_ms),
-          durationSeconds: c.duration_seconds,
-        },
-      });
-    counters.recordsNew += 1;
-  }
+  const rows = batch
+    .filter((c) => c.external_id)
+    .map((c) => ({
+      externalId: c.external_id,
+      handle: c.handle ?? null,
+      direction: c.direction,
+      startedAt: new Date(c.started_at_ms),
+      durationSeconds: c.duration_seconds,
+    }));
+  counters.recordsSeen += batch.length;
+  if (rows.length === 0) return;
+  // Single multi-row upsert — row-by-row was too slow over Supabase.
+  await db
+    .insert(callLogs)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: callLogs.externalId,
+      set: {
+        handle: sql`excluded.handle`,
+        direction: sql`excluded.direction`,
+        startedAt: sql`excluded.started_at`,
+        durationSeconds: sql`excluded.duration_seconds`,
+      },
+    });
+  counters.recordsNew += rows.length;
 }
