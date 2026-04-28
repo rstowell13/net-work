@@ -19,7 +19,13 @@ export async function getSupabaseServer() {
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
+              // Single-user app — extend Supabase auth cookies to 1 year
+              // so the browser doesn't drop the session on restart.
+              // Supabase still rotates the refresh token under the hood.
+              const extended = name.startsWith("sb-")
+                ? { ...options, maxAge: 60 * 60 * 24 * 365 }
+                : options;
+              cookieStore.set(name, value, extended);
             });
           } catch {
             // setAll called from RSC where we cannot mutate cookies — that's fine.
