@@ -35,9 +35,9 @@ Before code can begin. I'll guide him through each on day 1.
 
 ## Project state
 
-- **Current phase:** Phase 4 (Build) — Milestones 1–3 complete; M4 (Merge) is next.
+- **Current phase:** Phase 4 (Build) — Milestones 1–4 complete; M5 (Triage) is next.
 - **Last updated:** 2026-04-27.
-- **Next action:** Begin Milestone 4 — auto-grouped merge candidates + bulk-merge UI.
+- **Next action:** Begin Milestone 5 — onboarding triage flow + `/contacts` bulk list.
 
 ---
 
@@ -200,16 +200,16 @@ Before code can begin. I'll guide him through each on day 1.
 
 ### Tasks
 
-- [ ] **4.1 Write Vitest tests for confidence tiers** with fixture RawContacts: exact email match → Exact; phone match no email match → High; name overlap with no shared identifier → Ambiguous; name + LinkedIn match → High.
-- [ ] **4.2 Implement `confidence.ts`** to make tests pass. Pure function over `RawContact[]`.
-- [ ] **4.3 Implement `dedupe.ts`** — runs over all unmerged RawContacts, produces MergeCandidate rows. Idempotent re-run (don't recreate already-pending or resolved groups).
-- [ ] **4.4 Implement `apply.ts`** — given a MergeCandidate, create a Contact row, set `RawContact.contact_id` for all members, set `MergeCandidate.status = approved`, set `resulting_contact_id`. Conflict resolution: most recent wins for fields, but per-field overrides allowed.
-- [ ] **4.5 Build `/merge` page** matching `merge/chosen.html` — hero stats, dark CTA card, ready-to-merge single-column list, "need a closer look" single-column spread.
-- [ ] **4.6 Implement bulk-merge endpoint** that processes 38+ groups in one transaction with a progress toast.
-- [ ] **4.7 Build `/merge/[id]` page** — side-by-side per-field diff for ambiguous groups, Approve / Split / Skip buttons.
-- [ ] **4.8 Manual merge flow** — search two contacts → combine. Reachable from a "+ Manual merge" hero button.
-- [ ] **4.9 Run dedupe on Robb's real data.** Verify the suggested groups look sane.
-- [ ] **4.10 Commit + tag `m4-merge`.**
+- [x] **4.1 Write Vitest tests for confidence tiers** with fixture RawContacts: exact email match → Exact; phone match no email match → High; name overlap with no shared identifier → Ambiguous; name + LinkedIn match → High.
+- [x] **4.2 Implement `confidence.ts`** to make tests pass. Pure function over `RawContact[]`.
+- [x] **4.3 Implement `dedupe.ts`** — runs over all unmerged RawContacts, produces MergeCandidate rows. Idempotent re-run (don't recreate already-pending or resolved groups).
+- [x] **4.4 Implement `apply.ts`** — given a MergeCandidate, create a Contact row, set `RawContact.contact_id` for all members, set `MergeCandidate.status = approved`, set `resulting_contact_id`. Conflict resolution: most recent wins for fields, but per-field overrides allowed.
+- [x] **4.5 Build `/merge` page** matching `merge/chosen.html` — hero stats, dark CTA card, ready-to-merge single-column list, "need a closer look" single-column spread.
+- [x] **4.6 Implement bulk-merge endpoint** that processes 38+ groups in one transaction with a progress toast.
+- [x] **4.7 Build `/merge/[id]` page** — side-by-side per-field diff for ambiguous groups, Approve / Split / Skip buttons.
+- [x] **4.8 Manual merge flow** — search two contacts → combine. Reachable from a "+ Manual merge" hero button.
+- [x] **4.9 Run dedupe on Robb's real data.** Verify the suggested groups look sane.
+- [x] **4.10 Commit + tag `m4-merge`.**
 
 **Verification:** Robb runs through merge, ends up with hundreds of Contact rows linked to thousands of RawContacts. `/merge` is empty (or only ambiguous groups remain).
 
