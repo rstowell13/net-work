@@ -128,7 +128,7 @@ def sync_contacts(pusher):
     from readers import apple_contacts
 
     total = 0
-    for batch in apple_contacts.iter_contacts(batch_size=200):
+    for batch in apple_contacts.iter_contacts(batch_size=100):
         result = pusher.push("contacts", batch)
         total += len(batch)
         log.info(
