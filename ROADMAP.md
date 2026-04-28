@@ -35,9 +35,9 @@ Before code can begin. I'll guide him through each on day 1.
 
 ## Project state
 
-- **Current phase:** Phase 4 (Build) — Milestones 1–4 complete; M5 (Triage) is next.
+- **Current phase:** Phase 4 (Build) — Milestones 1–5 complete; M6 (Contact Detail + Diary + Freshness + Summary) is next.
 - **Last updated:** 2026-04-27.
-- **Next action:** Begin Milestone 5 — onboarding triage flow + `/contacts` bulk list.
+- **Next action:** Begin Milestone 6 — Contact Detail page + Diary aggregator + Freshness scoring + Relationship Summary.
 
 ---
 
@@ -235,15 +235,15 @@ Before code can begin. I'll guide him through each on day 1.
 
 ### Tasks
 
-- [ ] **5.1 Build `Avatar` component** — photo if available, otherwise italic Source Serif initials on a deterministic-color background from `lib/avatar-color.ts`. Unit-test the hash so the same contact always gets the same color.
-- [ ] **5.2 Build `FreshnessRing`** — SVG ring with thicker stroke (5px / 6px / 8px depending on size), label below, traffic-light coloring per band. Used on Home, Contact Detail, Triage, Contacts.
-- [ ] **5.3 Build `TriageCard`** matching `triage/chosen.html` — avatar, name, meta-row, source badges, signals strip, recent history preview, Skip/Keep buttons + keyboard shortcuts (← → Z).
-- [ ] **5.4 Build `/triage` page** — pulls one un-triaged Contact at a time, renders the card. On Keep, prompt for category (P/B/X), then advance. Save decisions to `Contact.triage_status` and `Contact.category`.
-- [ ] **5.5 Build `ContactRow`** matching `contacts/chosen.html` (Option B locked) — checkbox, avatar, name + email, category chip, tags, freshness ring, last-seen.
-- [ ] **5.6 Build `/contacts` page** with persistent left filter sidebar (Status / Category / Recency / Tags / Source), virtualized row list, bulk-action toolbar.
-- [ ] **5.7 Implement bulk-action endpoints** — keep (with category), skip, add tag, add to this week's plan, re-categorize.
-- [ ] **5.8 End-to-end test.** Robb triages 100+ contacts via the card flow and 100+ via bulk list. Both write the same state.
-- [ ] **5.9 Commit + tag `m5-triage`.**
+- [x] **5.1 Build `Avatar` component** — photo if available, otherwise italic Source Serif initials on a deterministic-color background from `lib/avatar-color.ts`. Unit-test the hash so the same contact always gets the same color.
+- [x] **5.2 Build `FreshnessRing`** — SVG ring with thicker stroke (5px / 6px / 8px depending on size), label below, traffic-light coloring per band. Used on Home, Contact Detail, Triage, Contacts.
+- [x] **5.3 Build `TriageCard`** matching `triage/chosen.html` — avatar, name, meta-row, source badges, signals strip, recent history preview, Skip/Keep buttons + keyboard shortcuts (← → Z).
+- [x] **5.4 Build `/triage` page** — pulls one un-triaged Contact at a time, renders the card. On Keep, prompt for category (P/B/X), then advance. Save decisions to `Contact.triage_status` and `Contact.category`.
+- [x] **5.5 Build `ContactRow`** matching `contacts/chosen.html` (Option B locked) — checkbox, avatar, name + email, category chip, tags, freshness ring, last-seen.
+- [x] **5.6 Build `/contacts` page** with persistent left filter sidebar (Status / Category / Recency / Tags / Source), virtualized row list, bulk-action toolbar.
+- [x] **5.7 Implement bulk-action endpoints** — keep (with category), skip, add tag, add to this week's plan, re-categorize.
+- [x] **5.8 End-to-end test.** Robb triages 100+ contacts via the card flow and 100+ via bulk list. Both write the same state.
+- [x] **5.9 Commit + tag `m5-triage`.**
 
 **Verification:** "kept" pool is meaningfully populated with categories. `/contacts` lists them with working filters and bulk actions.
 
