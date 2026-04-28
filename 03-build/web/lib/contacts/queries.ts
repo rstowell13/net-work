@@ -30,10 +30,13 @@ async function aggregateLastSeen(
   // Pull max(sent_at|started_at) per contact across messages/emails/calls.
   // Three small queries, one merge in JS — clearer than a UNION subquery.
   const out = new Map<string, Date>();
-  const update = (id: string | null, when: Date | null) => {
+  // postgres-js returns max(timestamp) as a string from aggregate queries;
+  // coerce to Date so callers can use .getTime().
+  const update = (id: string | null, when: Date | string | null) => {
     if (!id || !when) return;
+    const date = when instanceof Date ? when : new Date(when);
     const cur = out.get(id);
-    if (!cur || cur < when) out.set(id, when);
+    if (!cur || cur < date) out.set(id, date);
   };
 
   const m = await db
