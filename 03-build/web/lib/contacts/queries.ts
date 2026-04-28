@@ -69,6 +69,65 @@ async function aggregateLastSeen(
   return out;
 }
 
+async function aggregateInteractions365(
+  contactIds: string[],
+): Promise<Map<string, number>> {
+  if (contactIds.length === 0) return new Map();
+  const cutoff = new Date(Date.now() - 365 * 86400_000);
+  const out = new Map<string, number>();
+  const bump = (id: string | null, n: number) => {
+    if (!id) return;
+    out.set(id, (out.get(id) ?? 0) + n);
+  };
+
+  const m = await db
+    .select({
+      id: schema.messages.contactId,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(schema.messages)
+    .where(
+      and(
+        inArray(schema.messages.contactId, contactIds),
+        sql`${schema.messages.sentAt} >= ${cutoff}`,
+      ),
+    )
+    .groupBy(schema.messages.contactId);
+  for (const r of m) bump(r.id, r.n);
+
+  const e = await db
+    .select({
+      id: schema.emails.contactId,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(schema.emails)
+    .where(
+      and(
+        inArray(schema.emails.contactId, contactIds),
+        sql`${schema.emails.sentAt} >= ${cutoff}`,
+      ),
+    )
+    .groupBy(schema.emails.contactId);
+  for (const r of e) bump(r.id, r.n);
+
+  const c = await db
+    .select({
+      id: schema.callLogs.contactId,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(schema.callLogs)
+    .where(
+      and(
+        inArray(schema.callLogs.contactId, contactIds),
+        sql`${schema.callLogs.startedAt} >= ${cutoff}`,
+      ),
+    )
+    .groupBy(schema.callLogs.contactId);
+  for (const r of c) bump(r.id, r.n);
+
+  return out;
+}
+
 async function aggregateSources(
   contactIds: string[],
 ): Promise<Map<string, { kinds: Set<string>; count: number }>> {
@@ -120,14 +179,16 @@ export async function listContacts(
     .limit(limit);
 
   const ids = rows.map((r) => r.id);
-  const [lastSeen, sources] = await Promise.all([
+  const [lastSeen, sources, freq] = await Promise.all([
     aggregateLastSeen(ids),
     aggregateSources(ids),
+    aggregateInteractions365(ids),
   ]);
 
   let result: ContactListRow[] = rows.map((c) => {
     const ls = lastSeen.get(c.id) ?? null;
     const src = sources.get(c.id) ?? { kinds: new Set<string>(), count: 0 };
+    const interactions = freq.get(c.id) ?? 0;
     return {
       id: c.id,
       displayName: c.displayName,
@@ -137,7 +198,10 @@ export async function listContacts(
       category: c.category,
       triageStatus: c.triageStatus,
       lastSeenAt: ls,
-      freshness: computeFreshness(ls),
+      freshness: computeFreshness({
+        lastSeenAt: ls,
+        interactions365: interactions,
+      }),
       sources: [...src.kinds],
       rawCount: src.count,
     };
@@ -224,12 +288,14 @@ export async function getNextTriageContact(userId: string) {
     .limit(1);
   if (!c) return null;
 
-  const [lastSeen, sources] = await Promise.all([
+  const [lastSeen, sources, freq] = await Promise.all([
     aggregateLastSeen([c.id]),
     aggregateSources([c.id]),
+    aggregateInteractions365([c.id]),
   ]);
   const ls = lastSeen.get(c.id) ?? null;
   const src = sources.get(c.id) ?? { kinds: new Set<string>(), count: 0 };
+  const interactions = freq.get(c.id) ?? 0;
 
   // Pull a small recent history slice for the card preview.
   const [recentMsgs, recentEmails, recentCalls] = await Promise.all([
@@ -279,7 +345,10 @@ export async function getNextTriageContact(userId: string) {
   return {
     contact: c,
     lastSeenAt: ls,
-    freshness: computeFreshness(ls),
+    freshness: computeFreshness({
+      lastSeenAt: ls,
+      interactions365: interactions,
+    }),
     sources: [...src.kinds],
     recent: {
       messages: recentMsgs,

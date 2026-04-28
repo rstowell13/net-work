@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
@@ -171,10 +172,9 @@ export function ContactsList({ rows }: { rows: SerializedRow[] }) {
               ? Math.floor((now - last.getTime()) / 86400_000)
               : null;
           return (
-            <div
+            <Link
               key={row.id}
-              role="button"
-              onClick={() => toggle(row.id)}
+              href={`/contacts/${row.id}`}
               className="grid cursor-pointer items-center gap-[18px] border-b px-3 py-3.5 transition-colors hover:bg-[var(--stone-raised)]"
               style={{
                 gridTemplateColumns:
@@ -268,7 +268,7 @@ export function ContactsList({ rows }: { rows: SerializedRow[] }) {
               >
                 {days === null ? "—" : `${days}d`}
               </div>
-            </div>
+            </Link>
           );
         })
       )}
