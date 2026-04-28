@@ -24,7 +24,7 @@ export default async function TriagePage() {
 
   return (
     <AppShell active="/triage">
-      <div className="mx-auto max-w-[760px] px-14 pb-16 pt-8">
+      <div className="mx-auto max-w-[760px] px-4 pb-24 pt-6 md:px-14 md:pb-16 md:pt-8">
         {!next ? (
           <EmptyState />
         ) : (

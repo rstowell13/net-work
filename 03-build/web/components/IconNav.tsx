@@ -57,7 +57,7 @@ const items: NavItem[] = [
 export function IconNav({ active }: { active: string }) {
   return (
     <aside
-      className="sticky top-[60px] flex h-[calc(100dvh-60px)] flex-col items-center gap-1 border-r px-2 py-5"
+      className="sticky top-[60px] hidden h-[calc(100dvh-60px)] flex-col items-center gap-1 border-r px-2 py-5 md:flex"
       style={{ background: "var(--stone)", borderColor: "var(--rule)", width: 64 }}
     >
       {items.map((item) => {

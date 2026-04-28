@@ -11,7 +11,7 @@ export default async function CadencePage() {
   const cadence = await getCadence(user.id);
   return (
     <AppShell active="/settings">
-      <div className="mx-auto max-w-[760px] px-14 pb-16 pt-8">
+      <div className="mx-auto max-w-[760px] px-4 pb-24 pt-6 md:px-14 md:pb-16 md:pt-8">
         <p
           className="mb-2 text-[12px]"
           style={{ color: "var(--ink-faint)" }}

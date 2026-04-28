@@ -51,14 +51,24 @@ export default async function ContactsPage({
 
   return (
     <AppShell active="/contacts">
-      <div
-        className="grid"
-        style={{ gridTemplateColumns: "240px 1fr" }}
-      >
-        <aside
-          className="sticky top-[60px] h-[calc(100dvh-60px)] overflow-y-auto border-r px-6 pb-16 pt-8"
+      <div className="md:grid md:grid-cols-[240px_1fr]">
+        <details
+          className="border-b md:contents"
           style={{ borderColor: "var(--rule)" }}
         >
+          <summary
+            className="flex cursor-pointer items-center justify-between px-4 py-3 text-[13px] font-semibold uppercase tracking-[0.08em] md:hidden"
+            style={{ color: "var(--ink-muted)" }}
+          >
+            Filters
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </summary>
+          <aside
+            className="border-t px-4 pb-6 pt-4 md:sticky md:top-[60px] md:h-[calc(100dvh-60px)] md:overflow-y-auto md:border-r md:border-t-0 md:px-6 md:pb-16 md:pt-8"
+            style={{ borderColor: "var(--rule)" }}
+          >
           <FilterBlock title="Status">
             <FilterLink
               label="Kept"
@@ -155,9 +165,10 @@ export default async function ContactsPage({
               />
             )}
           </FilterBlock>
-        </aside>
+          </aside>
+        </details>
 
-        <main className="px-10 pb-16 pt-8">
+        <main className="px-4 pb-24 pt-6 md:px-10 md:pb-16 md:pt-8">
           <div className="mb-2 flex items-baseline justify-between">
             <h1
               className="m-0"

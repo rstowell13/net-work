@@ -22,7 +22,7 @@ export default async function HomePage() {
 
   return (
     <AppShell active="/">
-      <div className="mx-auto max-w-[1100px] px-14 pb-24 pt-8">
+      <div className="mx-auto max-w-[1100px] px-4 pb-24 pt-6 md:px-14 md:pt-8">
         <p
           className="mb-3 flex items-center gap-2 text-[11.5px] font-semibold uppercase tracking-[0.14em]"
           style={{ color: "var(--ink-faint)" }}
@@ -158,7 +158,7 @@ async function NoPlanState({
   const { candidates, cadence } = await getCandidates(userId, 5);
   return (
     <AppShell active="/">
-      <div className="mx-auto max-w-[1100px] px-14 pb-24 pt-8">
+      <div className="mx-auto max-w-[1100px] px-4 pb-24 pt-6 md:px-14 md:pt-8">
         <p
           className="mb-3 flex items-center gap-2 text-[11.5px] font-semibold uppercase tracking-[0.14em]"
           style={{ color: "var(--ink-faint)" }}
@@ -285,7 +285,7 @@ async function NoPlanState({
 function FirstRun() {
   return (
     <AppShell active="/">
-      <div className="mx-auto max-w-[1100px] px-14 py-10 pb-20">
+      <div className="mx-auto max-w-[1100px] px-4 pb-24 pt-6 md:px-14 md:py-10 md:pb-20">
         <p
           className="mb-2 text-[11.5px] font-medium uppercase tracking-[0.14em]"
           style={{ color: "var(--ink-faint)" }}

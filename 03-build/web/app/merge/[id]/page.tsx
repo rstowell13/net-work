@@ -52,7 +52,7 @@ export default async function MergeDetailPage({
 
   return (
     <AppShell active="/merge">
-      <div className="mx-auto max-w-[960px] px-14 pb-24 pt-8">
+      <div className="mx-auto max-w-[960px] px-4 pb-24 pt-6 md:px-14 md:pt-8">
         <Link
           href="/merge"
           className="text-[12px] font-medium"

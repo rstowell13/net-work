@@ -118,7 +118,7 @@ export default async function ContactDetailPage({
 
   return (
     <AppShell active="/contacts">
-      <div className="mx-auto max-w-[1080px] px-14 pb-24 pt-8">
+      <div className="mx-auto max-w-[1080px] px-4 pb-24 pt-6 md:px-14 md:pt-8">
         <nav
           className="mb-8 flex items-center gap-1.5 text-[12px] font-medium"
           style={{ color: "var(--ink-faint)" }}
@@ -131,7 +131,7 @@ export default async function ContactDetailPage({
         </nav>
 
         <section
-          className="grid items-end gap-14 border-b pb-9"
+          className="flex flex-col gap-6 border-b pb-9 md:grid md:items-end md:gap-14"
           style={{
             gridTemplateColumns: "minmax(0, 1.5fr) auto",
             borderColor: "var(--rule)",
@@ -166,10 +166,7 @@ export default async function ContactDetailPage({
                 {diary.length} entr{diary.length === 1 ? "y" : "ies"}
               </span>
             </div>
-            <div
-              className="grid items-center gap-6"
-              style={{ gridTemplateColumns: "88px 1fr" }}
-            >
+            <div className="flex items-center gap-4 md:gap-6">
               <Avatar
                 id={contact.id}
                 name={contact.displayName}
@@ -177,14 +174,14 @@ export default async function ContactDetailPage({
                 size="xl"
               />
               <h1
-                className="m-0"
+                className="m-0 min-w-0 break-words"
                 style={{
                   fontFamily:
                     "var(--font-serif, 'Source Serif 4'), Georgia, serif",
                   fontStyle: "italic",
                   fontWeight: 500,
-                  fontSize: "clamp(56px, 7.5vw, 96px)",
-                  lineHeight: 0.92,
+                  fontSize: "clamp(36px, 9vw, 96px)",
+                  lineHeight: 0.95,
                   letterSpacing: "-0.03em",
                   fontVariationSettings: "'opsz' 144",
                 }}
@@ -397,7 +394,7 @@ export default async function ContactDetailPage({
 
         <section className="py-8">
           <BlockHeader title="Sources & merge history" />
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             <MetaBlock title="Source records">
               {rawMembers.length === 0 ? (
                 <span style={{ color: "var(--ink-faint)" }}>
@@ -498,7 +495,7 @@ function ActionLink({
       href={href}
       target={href.startsWith("http") ? "_blank" : undefined}
       rel={href.startsWith("http") ? "noreferrer" : undefined}
-      className="inline-flex items-center gap-2 rounded-md border px-3.5 py-2 text-[13px] font-medium hover:border-[var(--brass)]"
+      className="inline-flex min-h-[44px] items-center gap-2 rounded-md border px-4 py-2 text-[14px] font-medium hover:border-[var(--brass)] md:min-h-0 md:px-3.5 md:py-2 md:text-[13px]"
       style={{
         background: primary ? "var(--ink)" : "var(--stone-raised)",
         color: primary ? "var(--stone)" : "var(--ink)",

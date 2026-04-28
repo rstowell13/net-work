@@ -24,7 +24,7 @@ export default async function MergePage() {
 
   return (
     <AppShell active="/merge">
-      <div className="mx-auto max-w-[1280px] px-14 pb-24 pt-8">
+      <div className="mx-auto max-w-[1280px] px-4 pb-24 pt-6 md:px-14 md:pt-8">
         <section
           className="grid gap-12 border-b pb-8"
           style={{

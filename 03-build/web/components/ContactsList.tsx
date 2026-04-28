@@ -138,6 +138,8 @@ export function ContactsList({ rows }: { rows: SerializedRow[] }) {
         </select>
       </div>
 
+      <div className="-mx-4 overflow-x-auto md:mx-0">
+      <div className="min-w-[800px]">
       <header
         className="grid h-9 items-center gap-[18px] border-b px-3 text-[11px] font-semibold uppercase tracking-[0.12em]"
         style={{
@@ -272,6 +274,8 @@ export function ContactsList({ rows }: { rows: SerializedRow[] }) {
           );
         })
       )}
+      </div>
+      </div>
     </>
   );
 }
