@@ -10,6 +10,7 @@ import {
   FollowUpToggle,
   RegenerateSummaryButton,
 } from "@/components/ContactActions";
+import { AddToWeekButton } from "@/components/AddToWeekButton";
 import { requireUser } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 import { getDiary, getRelationshipInputs } from "@/lib/diary";
@@ -217,12 +218,7 @@ export default async function ContactDetailPage({
           style={{ borderColor: "var(--rule)" }}
         >
           <div className="flex flex-wrap items-center gap-2">
-            <ActionLink
-              href={`/this-week/add?contact=${contact.id}`}
-              primary
-            >
-              + Add to this week
-            </ActionLink>
+            <AddToWeekButton contactId={contact.id} />
             {contact.primaryPhone && (
               <ActionLink href={`tel:${contact.primaryPhone}`}>Call</ActionLink>
             )}
