@@ -26,14 +26,21 @@ export interface ChatCompletionResult {
   model: string;
 }
 
-export async function chat(
-  messages: ChatMessage[],
-  opts: { temperature?: number; maxTokens?: number } = {},
-): Promise<ChatCompletionResult> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new LLMConfigError();
-  const model = process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-chat";
+function modelChain(): string[] {
+  const primary = process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-chat";
+  const fallbacks = (process.env.OPENROUTER_FALLBACK_MODELS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return [primary, ...fallbacks];
+}
 
+async function callOnce(
+  apiKey: string,
+  model: string,
+  messages: ChatMessage[],
+  opts: { temperature?: number; maxTokens?: number },
+): Promise<ChatCompletionResult> {
   const res = await fetch(ENDPOINT, {
     method: "POST",
     headers: {
@@ -59,4 +66,27 @@ export async function chat(
   };
   const text = json.choices?.[0]?.message?.content?.trim() ?? "";
   return { text, model: json.model ?? model };
+}
+
+export async function chat(
+  messages: ChatMessage[],
+  opts: { temperature?: number; maxTokens?: number } = {},
+): Promise<ChatCompletionResult> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new LLMConfigError();
+  const chain = modelChain();
+  const errors: string[] = [];
+  for (const model of chain) {
+    try {
+      return await callOnce(apiKey, model, messages, opts);
+    } catch (e) {
+      const msg = (e as Error).message ?? "unknown";
+      errors.push(`${model}: ${msg}`);
+      // Only fall through on 4xx model errors or "is not a valid model".
+      // Other errors (auth, network, 5xx) — also try next; cheap and safe.
+    }
+  }
+  throw new Error(
+    `all models failed (${chain.length}): ${errors.join(" | ")}`,
+  );
 }
