@@ -10,9 +10,20 @@ Returns a list of dicts ready for the web ingestion endpoint.
 
 from __future__ import annotations
 
+import base64
+import io
+import logging
 from typing import Iterator
 
 import Contacts  # type: ignore[import-not-found]
+from PIL import Image  # type: ignore[import-not-found]
+
+log = logging.getLogger(__name__)
+
+# Resize each photo to a square JPEG of this side, max. 256x256 ~= 20-30KB
+# at quality 80 — safely under Vercel's 4MB request cap even at batch=50.
+PHOTO_TARGET_SIDE = 256
+PHOTO_JPEG_QUALITY = 80
 
 
 CONTACT_KEYS = [
@@ -81,12 +92,11 @@ def _serialize(contact) -> dict:
             linkedin = url
             break
 
-    # v1 doesn't render photos (avatars use deterministic-color initials),
-    # so we deliberately don't send the base64-encoded image data — a
-    # batch of 200 contacts × ~100KB each would blow past Vercel's 4MB
-    # request body cap. We just record whether a photo was available so
-    # the schema can carry it later.
-    photo_available = bool(contact.imageDataAvailable())
+    photo_b64 = None
+    if contact.imageDataAvailable():
+        data = contact.imageData()
+        if data is not None:
+            photo_b64 = _resize_to_b64_jpeg(bytes(data))
 
     return {
         "external_id": contact.identifier(),
@@ -95,14 +105,41 @@ def _serialize(contact) -> dict:
         "emails": emails,
         "phones": phones,
         "linkedin_url": linkedin,
-        "photo_available": photo_available,
+        "photo_b64": photo_b64,
     }
 
 
-def iter_contacts(batch_size: int = 100) -> Iterator[list[dict]]:
-    """Yield batches of contacts (memory-friendly for the pusher).
-    Smaller batch size keeps each request well under Vercel's 4MB cap
-    even if the payload column on the server side bloats with extras.
+def _resize_to_b64_jpeg(raw: bytes) -> str | None:
+    """Resize a raw image to a 256x256 (square, center-cropped) JPEG and
+    return the base64-encoded result. ~20-30KB per photo at quality 80.
+
+    Returns None on decode failure (rare — Apple Contacts photos are
+    almost always JPEG/PNG).
+    """
+    try:
+        im = Image.open(io.BytesIO(raw))
+        im = im.convert("RGB")
+        # Center-crop to square
+        w, h = im.size
+        side = min(w, h)
+        left = (w - side) // 2
+        top = (h - side) // 2
+        im = im.crop((left, top, left + side, top + side))
+        # Resize
+        im = im.resize(
+            (PHOTO_TARGET_SIDE, PHOTO_TARGET_SIDE), Image.Resampling.LANCZOS
+        )
+        buf = io.BytesIO()
+        im.save(buf, format="JPEG", quality=PHOTO_JPEG_QUALITY, optimize=True)
+        return base64.b64encode(buf.getvalue()).decode("ascii")
+    except Exception as e:
+        log.warning("photo resize failed: %s", e)
+        return None
+
+
+def iter_contacts(batch_size: int = 50) -> Iterator[list[dict]]:
+    """Yield batches of contacts. With 256x256 JPEG photos (~25KB) inline,
+    50 contacts × 25KB = ~1.25MB — comfortably under Vercel's 4MB cap.
     """
     contacts = read_contacts()
     for i in range(0, len(contacts), batch_size):
