@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, sql, desc, inArray, isNull, isNotNull } from "drizzle-orm";
+import { and, eq, gte, sql, desc, inArray, isNull, isNotNull } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { computeFreshness, type FreshnessResult } from "@/lib/scoring/freshness";
 
@@ -89,7 +89,7 @@ async function aggregateInteractions365(
     .where(
       and(
         inArray(schema.messages.contactId, contactIds),
-        sql`${schema.messages.sentAt} >= ${cutoff}`,
+        gte(schema.messages.sentAt, cutoff),
       ),
     )
     .groupBy(schema.messages.contactId);
@@ -104,7 +104,7 @@ async function aggregateInteractions365(
     .where(
       and(
         inArray(schema.emails.contactId, contactIds),
-        sql`${schema.emails.sentAt} >= ${cutoff}`,
+        gte(schema.emails.sentAt, cutoff),
       ),
     )
     .groupBy(schema.emails.contactId);
@@ -119,7 +119,7 @@ async function aggregateInteractions365(
     .where(
       and(
         inArray(schema.callLogs.contactId, contactIds),
-        sql`${schema.callLogs.startedAt} >= ${cutoff}`,
+        gte(schema.callLogs.startedAt, cutoff),
       ),
     )
     .groupBy(schema.callLogs.contactId);
