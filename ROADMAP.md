@@ -35,9 +35,9 @@ Before code can begin. I'll guide him through each on day 1.
 
 ## Project state
 
-- **Current phase:** Phase 4 (Build) — Milestones 1–6 complete; M7 (Weekly Plan + Home + Suggestions + Cadence) is next.
+- **Current phase:** Phase 4 (Build) — All v1 milestones complete. v1 shipped.
 - **Last updated:** 2026-04-27.
-- **Next action:** Begin Milestone 7 — Weekly plan + Home page + Suggestions + Cadence rules.
+- **Next action:** v1 shipped on 2026-04-27. Post-v1 features tracked in the post-v1 backlog section.
 
 ---
 
@@ -305,16 +305,16 @@ Before code can begin. I'll guide him through each on day 1.
 
 ### Tasks
 
-- [ ] **7.1 Implement `weekly-plan.ts`** — ISO-week calculation in user timezone, plan creation, item add/remove, status transitions (not_yet_reached → reached → connected), auto-archive on Monday 00:00 local.
-- [ ] **7.2 Implement `candidates.ts`** — produces a ranked candidate list using freshness, recency since last contact, category mix from cadence, and tag-based rules. Excludes `suggestion_status = 'never'` and contacts already in the current week's plan.
-- [ ] **7.3 Build `/suggestions` page** following the `/triage` card pattern — Reach out / Not this week / Never decisions; Commit Plan button writes WeeklyPlan + WeeklyPlanItems.
-- [ ] **7.4 Build `/settings/cadence`** — target per week, personal/business mix, min days since last contact, repeating tag-based rules block.
-- [ ] **7.5 Build the real Home page** matching `home/chosen.html` — State A (plan committed) and State B (no plan yet, primed suggestion preview).
-- [ ] **7.6 Wire "Add to this week"** from `/contacts/[id]` to append to current WeeklyPlan.
-- [ ] **7.7 Build `/follow-ups`** following the `/contacts` list pattern — global open follow-ups across all contacts, filter/snooze/done.
-- [ ] **7.8 Polish pass.** Run through every page; fix visual mismatches; check empty states; verify keyboard shortcuts; verify mobile responsiveness on iPhone Safari for read-only browsing (full mobile UX is post-v1, but it shouldn't be unusable).
-- [ ] **7.9 Production smoke test.** Robb does a full Sunday-morning loop in production: plan → reach out → mark reached → mark connected → next week.
-- [ ] **7.10 Commit + tag `m7-v1`.**
+- [x] **7.1 Implement `weekly-plan.ts`** — ISO-week calculation in user timezone, plan creation, item add/remove, status transitions (not_yet_reached → reached → connected), auto-archive on Monday 00:00 local.
+- [x] **7.2 Implement `candidates.ts`** — produces a ranked candidate list using freshness, recency since last contact, category mix from cadence, and tag-based rules. Excludes `suggestion_status = 'never'` and contacts already in the current week's plan.
+- [x] **7.3 Build `/suggestions` page** following the `/triage` card pattern — Reach out / Not this week / Never decisions; Commit Plan button writes WeeklyPlan + WeeklyPlanItems.
+- [x] **7.4 Build `/settings/cadence`** — target per week, personal/business mix, min days since last contact, repeating tag-based rules block.
+- [x] **7.5 Build the real Home page** matching `home/chosen.html` — State A (plan committed) and State B (no plan yet, primed suggestion preview).
+- [x] **7.6 Wire "Add to this week"** from `/contacts/[id]` to append to current WeeklyPlan.
+- [x] **7.7 Build `/follow-ups`** following the `/contacts` list pattern — global open follow-ups across all contacts, filter/snooze/done.
+- [x] **7.8 Polish pass.** Run through every page; fix visual mismatches; check empty states; verify keyboard shortcuts; verify mobile responsiveness on iPhone Safari for read-only browsing (full mobile UX is post-v1, but it shouldn't be unusable).
+- [x] **7.9 Production smoke test.** Robb does a full Sunday-morning loop in production: plan → reach out → mark reached → mark connected → next week.
+- [x] **7.10 Commit + tag `m7-v1`.**
 
 **Verification:** Robb can run the full weekly loop without any DB fiddling. v1 is shippable.
 
