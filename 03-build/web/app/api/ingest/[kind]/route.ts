@@ -132,6 +132,11 @@ async function ingestContacts(
   for (const c of batch) {
     counters.recordsSeen += 1;
     if (!c.external_id) continue;
+    // Store the resized photo as a data: URL so the avatar component can
+    // render it directly. ~25KB per contact at 256x256 JPEG.
+    const avatarUrl = c.photo_b64
+      ? `data:image/jpeg;base64,${c.photo_b64}`
+      : null;
     const upserted = await db
       .insert(rawContacts)
       .values({
@@ -142,7 +147,7 @@ async function ingestContacts(
         emails: c.emails.map((e) => e.toLowerCase()),
         phones: c.phones,
         linkedinUrl: c.linkedin_url,
-        avatarUrl: null, // photo_b64 stored in payload; we don't persist as URL
+        avatarUrl,
       })
       .onConflictDoUpdate({
         target: [rawContacts.sourceId, rawContacts.externalId],
@@ -152,6 +157,7 @@ async function ingestContacts(
           emails: c.emails.map((e) => e.toLowerCase()),
           phones: c.phones,
           linkedinUrl: c.linkedin_url,
+          avatarUrl,
           updatedAt: new Date(),
         },
       })
