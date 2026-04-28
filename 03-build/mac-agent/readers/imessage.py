@@ -14,6 +14,8 @@ import os
 import sqlite3
 from typing import Iterator
 
+from . import _attributed_body
+
 DEFAULT_DB_PATH = os.path.expanduser("~/Library/Messages/chat.db")
 EIGHT_HOURS_NS = 8 * 60 * 60 * 1_000_000_000  # iMessage uses Apple epoch nanoseconds
 
@@ -29,7 +31,11 @@ def _apple_ns_to_unix_ms(apple_ns: int) -> int:
     return int(apple_ns / 1_000_000) + APPLE_EPOCH_OFFSET_S * 1000
 
 
-def read_messages_since(rowid_floor: int = 0, db_path: str | None = None) -> list[dict]:
+def read_messages_since(
+    rowid_floor: int = 0,
+    db_path: str | None = None,
+    stats: dict | None = None,
+) -> list[dict]:
     """
     Read all iMessage / SMS messages with ROWID > rowid_floor.
     Returns rows ordered by ROWID asc so the agent can checkpoint.
@@ -38,6 +44,9 @@ def read_messages_since(rowid_floor: int = 0, db_path: str | None = None) -> lis
       external_id (= guid), handle (phone or email), body, sent_at_ms,
       direction ("inbound"|"outbound"), channel ("imessage"|"sms"),
       rowid (int — used as watermark)
+
+    If `stats` is provided it will be populated with per-source counts
+    (text_only, attributed_only, no_handle, skipped_no_body, scanned).
     """
     path = db_path or DEFAULT_DB_PATH
     if not os.path.exists(path):
@@ -46,18 +55,24 @@ def read_messages_since(rowid_floor: int = 0, db_path: str | None = None) -> lis
             "Has Full Disk Access been granted to this Python interpreter?"
         )
 
+    counters = {"scanned": 0, "text_only": 0, "attributed_only": 0, "skipped_no_body": 0, "no_handle": 0}
+
     # Read-only connection. URI mode lets us specify mode=ro.
     uri = f"file:{path}?mode=ro"
     con = sqlite3.connect(uri, uri=True)
     con.row_factory = sqlite3.Row
     try:
         cur = con.cursor()
+        # NOTE: no `text IS NOT NULL` filter. On modern macOS most iMessages
+        # carry their body in `attributedBody` (a typedstream blob) and have
+        # NULL `text`. We decode `attributedBody` in Python below.
         cur.execute(
             """
             SELECT
               m.ROWID            as rowid,
               m.guid             as guid,
               m.text             as body,
+              m.attributedBody   as attributed_body,
               m.date             as apple_ns,
               m.is_from_me       as is_from_me,
               m.service          as service,
@@ -65,26 +80,49 @@ def read_messages_since(rowid_floor: int = 0, db_path: str | None = None) -> lis
             FROM message m
             LEFT JOIN handle h ON h.ROWID = m.handle_id
             WHERE m.ROWID > ?
-              AND m.text IS NOT NULL
-              AND length(m.text) > 0
             ORDER BY m.ROWID ASC
             """,
             (rowid_floor,),
         )
         out: list[dict] = []
         for r in cur.fetchall():
+            counters["scanned"] += 1
+            text = r["body"]
+            if text and len(text) > 0:
+                body = text
+                counters["text_only"] += 1
+            else:
+                decoded = _attributed_body.extract_text(r["attributed_body"])
+                if decoded:
+                    body = decoded
+                    counters["attributed_only"] += 1
+                else:
+                    # Tapback / sticker / attachment-only / undecodable — skip.
+                    counters["skipped_no_body"] += 1
+                    continue
+
+            handle = r["handle"] or ""
+            if not handle:
+                # Group-chat messages (no 1:1 handle) — skip for now; the
+                # current schema keys threads on handle, so these would
+                # collapse into one bogus thread.
+                counters["no_handle"] += 1
+                continue
+
             channel = "imessage" if (r["service"] or "iMessage") == "iMessage" else "sms"
             out.append(
                 {
                     "rowid": r["rowid"],
                     "external_id": r["guid"],
-                    "handle": r["handle"] or "",
-                    "body": r["body"] or "",
+                    "handle": handle,
+                    "body": body,
                     "sent_at_ms": _apple_ns_to_unix_ms(r["apple_ns"] or 0),
                     "direction": "outbound" if r["is_from_me"] else "inbound",
                     "channel": channel,
                 }
             )
+        if stats is not None:
+            stats.update(counters)
         return out
     finally:
         con.close()

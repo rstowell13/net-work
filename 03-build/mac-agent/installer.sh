@@ -32,7 +32,7 @@ echo "==> downloading agent source into $INSTALL_DIR"
 for f in agent.py pusher.py requirements.txt; do
   curl -fsSL "$REPO_RAW/$f" -o "$INSTALL_DIR/$f"
 done
-for f in __init__.py apple_contacts.py imessage.py call_history.py; do
+for f in __init__.py apple_contacts.py imessage.py call_history.py _attributed_body.py; do
   curl -fsSL "$REPO_RAW/readers/$f" -o "$INSTALL_DIR/readers/$f"
 done
 
@@ -93,8 +93,16 @@ Next: grant Full Disk Access + Contacts permission to:
   System Settings → Privacy & Security → Full Disk Access  → click + → add the path above
   System Settings → Privacy & Security → Contacts          → enable for Terminal (or for python if shown)
 
+For a complete iMessage history (recommended before first sync):
+  System Settings → [Your Name] → iCloud → Messages on iCloud → SYNC NOW
+  Also: turn OFF "Optimize Mac Storage" so older messages live on disk,
+  not just in iCloud. Without this, chat.db only contains recent messages.
+
 To trigger an immediate sync (after permissions are granted):
   cd "$INSTALL_DIR" && ./.venv/bin/python -m agent
+
+To re-push the entire history from scratch (idempotent — server dedups by message GUID):
+  cd "$INSTALL_DIR" && ./.venv/bin/python -m agent --reset
 
 To watch the log:
   tail -f "$INSTALL_DIR/agent.log"

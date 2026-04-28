@@ -143,7 +143,17 @@ def sync_contacts(pusher):
 def sync_messages(pusher, rowid_floor: int) -> int:
     from readers import imessage
 
-    msgs = imessage.read_messages_since(rowid_floor=rowid_floor)
+    stats: dict = {}
+    msgs = imessage.read_messages_since(rowid_floor=rowid_floor, stats=stats)
+    log.info(
+        "imessage read · scanned=%d text_only=%d attributed_only=%d skipped_no_body=%d no_handle=%d → kept=%d",
+        stats.get("scanned", 0),
+        stats.get("text_only", 0),
+        stats.get("attributed_only", 0),
+        stats.get("skipped_no_body", 0),
+        stats.get("no_handle", 0),
+        len(msgs),
+    )
     if not msgs:
         log.info("no new messages since rowid=%d", rowid_floor)
         return rowid_floor
