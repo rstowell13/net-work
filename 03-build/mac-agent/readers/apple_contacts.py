@@ -38,7 +38,9 @@ def read_contacts() -> list[dict]:
     def handler(contact, _stop):
         out.append(_serialize(contact))
 
-    success, error = store.enumerateContactsWithFetchRequest_error_handler_(
+    # Cocoa selector: -[CNContactStore enumerateContactsWithFetchRequest:error:usingBlock:]
+    # PyObjC translates `usingBlock:` → `_usingBlock_` (NOT `_handler_`).
+    success, error = store.enumerateContactsWithFetchRequest_error_usingBlock_(
         request, None, handler
     )
     if not success:

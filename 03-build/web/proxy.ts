@@ -6,7 +6,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const PUBLIC_PATHS = ["/login", "/auth/callback"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/auth/callback",
+  // Mac-agent ingestion uses bearer-token auth (validated inside the
+  // route handler), not a Supabase session. Bypass the redirect-to-/login
+  // so POSTs from the agent reach the handler.
+  "/api/ingest",
+];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
