@@ -81,12 +81,12 @@ def _serialize(contact) -> dict:
             linkedin = url
             break
 
-    photo_b64 = None
-    if contact.imageDataAvailable():
-        data = contact.imageData()
-        if data is not None:
-            import base64
-            photo_b64 = base64.b64encode(bytes(data)).decode("ascii")
+    # v1 doesn't render photos (avatars use deterministic-color initials),
+    # so we deliberately don't send the base64-encoded image data — a
+    # batch of 200 contacts × ~100KB each would blow past Vercel's 4MB
+    # request body cap. We just record whether a photo was available so
+    # the schema can carry it later.
+    photo_available = bool(contact.imageDataAvailable())
 
     return {
         "external_id": contact.identifier(),
@@ -95,12 +95,15 @@ def _serialize(contact) -> dict:
         "emails": emails,
         "phones": phones,
         "linkedin_url": linkedin,
-        "photo_b64": photo_b64,
+        "photo_available": photo_available,
     }
 
 
-def iter_contacts(batch_size: int = 200) -> Iterator[list[dict]]:
-    """Yield batches of contacts (memory-friendly for the pusher)."""
+def iter_contacts(batch_size: int = 100) -> Iterator[list[dict]]:
+    """Yield batches of contacts (memory-friendly for the pusher).
+    Smaller batch size keeps each request well under Vercel's 4MB cap
+    even if the payload column on the server side bloats with extras.
+    """
     contacts = read_contacts()
     for i in range(0, len(contacts), batch_size):
         yield contacts[i : i + batch_size]
