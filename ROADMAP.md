@@ -35,9 +35,9 @@ Before code can begin. I'll guide him through each on day 1.
 
 ## Project state
 
-- **Current phase:** Phase 4 (Build) — Milestones 1–5 complete; M6 (Contact Detail + Diary + Freshness + Summary) is next.
+- **Current phase:** Phase 4 (Build) — Milestones 1–6 complete; M7 (Weekly Plan + Home + Suggestions + Cadence) is next.
 - **Last updated:** 2026-04-27.
-- **Next action:** Begin Milestone 6 — Contact Detail page + Diary aggregator + Freshness scoring + Relationship Summary.
+- **Next action:** Begin Milestone 7 — Weekly plan + Home page + Suggestions + Cadence rules.
 
 ---
 
@@ -270,18 +270,18 @@ Before code can begin. I'll guide him through each on day 1.
 
 ### Tasks
 
-- [ ] **6.1 Implement `freshness.ts`** — recency- and frequency-weighted formula producing a 0–100 score and a band (Fresh / Warm / Fading / Cold / Dormant). Test with fixtures.
-- [ ] **6.2 Background job** to compute Freshness Scores nightly + on-demand after a sync. Writes to `Score` table (kind=`freshness`) with one current row + ScoreHistory.
-- [ ] **6.3 Implement `lib/llm/client.ts` and `lib/llm/summary.ts`.** Client wraps OpenRouter (OpenAI-compatible SDK works). Summary module exports `summarizeThread(thread)` (2–3 sentences) and `summarizeRelationship(contactId)` (single paragraph from full history + notes). System prompt isolated and short for cache reuse. Quality target: summaries that read naturally and don't editorialize. **Default model: DeepSeek V4.** If output is unsatisfying, swap to Llama 3.3 70B or Kimi 2.5 via the `OPENROUTER_MODEL` env var — no code change.
-- [ ] **6.4 Trigger thread summary generation** lazily on first view of the Diary, then cache. Also background-job common ones.
-- [ ] **6.5 Trigger relationship summary on Contact creation** + manual regenerate button.
-- [ ] **6.6 Implement `lib/diary.ts`** — pulls Message/MessageThread, Email/EmailThread, CallLog, CalendarEvent, Note for a given contact, returns a unified chronological list with summaries.
-- [ ] **6.7 Build `/contacts/[id]` page** matching `contact-detail/chosen.html` exactly: editorial hero, action bar with Reached/Connected check circles, Relationship Summary, Open Follow-ups, Diary, Sources & merge history.
-- [ ] **6.8 Build `DiaryModal`** — clicking a thread shows the full word-for-word messages or email body in an overlay.
-- [ ] **6.9 Add notes + follow-ups** — inline create on the contact page.
-- [ ] **6.10 Wire up the "Add to this week" button** (no-op until Milestone 7 ships WeeklyPlan).
-- [ ] **6.11 Smoke test on Sarah Kauffman or any real contact.** Verify: photo or avatar correct, action links dial out, freshness ring shows the right color/number, summary reads naturally, diary shows real data.
-- [ ] **6.12 Commit + tag `m6-contact-detail`.**
+- [x] **6.1 Implement `freshness.ts`** — recency- and frequency-weighted formula producing a 0–100 score and a band (Fresh / Warm / Fading / Cold / Dormant). Test with fixtures.
+- [x] **6.2 Background job** to compute Freshness Scores nightly + on-demand after a sync. Writes to `Score` table (kind=`freshness`) with one current row + ScoreHistory.
+- [x] **6.3 Implement `lib/llm/client.ts` and `lib/llm/summary.ts`.** Client wraps OpenRouter (OpenAI-compatible SDK works). Summary module exports `summarizeThread(thread)` (2–3 sentences) and `summarizeRelationship(contactId)` (single paragraph from full history + notes). System prompt isolated and short for cache reuse. Quality target: summaries that read naturally and don't editorialize. **Default model: DeepSeek V4.** If output is unsatisfying, swap to Llama 3.3 70B or Kimi 2.5 via the `OPENROUTER_MODEL` env var — no code change.
+- [x] **6.4 Trigger thread summary generation** lazily on first view of the Diary, then cache. Also background-job common ones.
+- [x] **6.5 Trigger relationship summary on Contact creation** + manual regenerate button.
+- [x] **6.6 Implement `lib/diary.ts`** — pulls Message/MessageThread, Email/EmailThread, CallLog, CalendarEvent, Note for a given contact, returns a unified chronological list with summaries.
+- [x] **6.7 Build `/contacts/[id]` page** matching `contact-detail/chosen.html` exactly: editorial hero, action bar with Reached/Connected check circles, Relationship Summary, Open Follow-ups, Diary, Sources & merge history.
+- [x] **6.8 Build `DiaryModal`** — clicking a thread shows the full word-for-word messages or email body in an overlay.
+- [x] **6.9 Add notes + follow-ups** — inline create on the contact page.
+- [x] **6.10 Wire up the "Add to this week" button** (no-op until Milestone 7 ships WeeklyPlan).
+- [x] **6.11 Smoke test on Sarah Kauffman or any real contact.** Verify: photo or avatar correct, action links dial out, freshness ring shows the right color/number, summary reads naturally, diary shows real data.
+- [x] **6.12 Commit + tag `m6-contact-detail`.**
 
 **Verification:** A random kept contact's page is genuinely useful — Robb can read it before reaching out and feel he knows the relationship.
 
