@@ -4,7 +4,7 @@ import { AppShell } from "@/components/AppShell";
 export default function SettingsPage() {
   return (
     <AppShell active="/settings">
-      <div className="mx-auto max-w-[760px] px-14 pb-16 pt-8">
+      <div className="mx-auto max-w-[760px] px-4 pb-24 pt-6 md:px-14 md:pb-16 md:pt-8">
         <h1
           className="m-0 mb-8"
           style={{

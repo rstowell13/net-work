@@ -48,7 +48,7 @@ export default async function FollowUpsPage({
 
   return (
     <AppShell active="/follow-ups">
-      <div className="mx-auto max-w-[900px] px-14 pb-24 pt-8">
+      <div className="mx-auto max-w-[900px] px-4 pb-24 pt-6 md:px-14 md:pt-8">
         <h1
           className="m-0 mb-3"
           style={{
