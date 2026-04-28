@@ -21,6 +21,7 @@ import {
 } from "@/db/schema";
 import { validateAgentToken } from "@/lib/agent-token";
 import { runImport } from "@/lib/sync/run";
+import { relinkAfterMerge } from "@/lib/relink";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -115,6 +116,25 @@ export async function POST(
       .update(sources)
       .set({ status: "connected" })
       .where(eq(sources.id, sourceId));
+  }
+
+  // After messages or contacts ingest, relink dangling diary rows so the
+  // diary view actually shows the new data. Idempotent + bounded by the
+  // count of NULL-contact_id rows, so cheap once steady-state. Swallow
+  // errors — a slow relink must never fail the ingest.
+  if (result.status === "success" && (kind === "messages" || kind === "contacts")) {
+    try {
+      const src = await db
+        .select({ userId: sources.userId })
+        .from(sources)
+        .where(eq(sources.id, sourceId))
+        .limit(1);
+      if (src[0]?.userId) {
+        await relinkAfterMerge(src[0].userId);
+      }
+    } catch (err) {
+      console.error("post-ingest relink failed", err);
+    }
   }
 
   return NextResponse.json(result);
