@@ -1,6 +1,13 @@
 /**
- * Recency-only proxy freshness score for M5 — full recency+frequency formula
- * lands in M6. Kept pure so a unit test pins the bands.
+ * Freshness scoring — recency + frequency.
+ *
+ * Score blends two factors:
+ *   - recency: how long ago the last interaction was (exponential decay).
+ *   - frequency: how many interactions occurred in the last 365 days
+ *     (logarithmic). Caps frequency contribution so a single old contact
+ *     can't outweigh a recent rapport.
+ *
+ * Output: 0..100 with a labelled band.
  */
 export type FreshnessBand =
   | "fresh"
@@ -11,9 +18,10 @@ export type FreshnessBand =
   | "unknown";
 
 export interface FreshnessResult {
-  score: number; // 0..100
+  score: number;
   band: FreshnessBand;
   daysSince: number | null;
+  interactions365: number;
 }
 
 const BAND_CUTOFFS: Array<[number, FreshnessBand]> = [
@@ -24,23 +32,33 @@ const BAND_CUTOFFS: Array<[number, FreshnessBand]> = [
   [0, "dormant"],
 ];
 
+export interface FreshnessInputs {
+  lastSeenAt: Date | null;
+  interactions365: number; // count of msg/email/call/event in last 365d
+}
+
 export function computeFreshness(
-  lastSeenAt: Date | null,
+  inputs: FreshnessInputs,
   now: Date = new Date(),
 ): FreshnessResult {
-  if (!lastSeenAt) return { score: 0, band: "unknown", daysSince: null };
+  const { lastSeenAt, interactions365 } = inputs;
+  if (!lastSeenAt) {
+    return { score: 0, band: "unknown", daysSince: null, interactions365: 0 };
+  }
   const days = Math.max(
     0,
-    Math.floor(
-      (now.getTime() - lastSeenAt.getTime()) / (1000 * 60 * 60 * 24),
-    ),
+    Math.floor((now.getTime() - lastSeenAt.getTime()) / 86400_000),
   );
-  // 0 days → 100; 14 days → ~80; 90 days → ~50; 365 days → ~20; 730+ → ~0.
-  const decay = Math.exp(-days / 180);
-  const score = Math.round(decay * 100);
+  // Recency: exponential decay; half-life ~125 days.
+  const recency = Math.exp(-days / 180);
+  // Frequency: 0 → 0; 1 → ~0.3; 5 → ~0.7; 20+ → ~1. log scale.
+  const freq = Math.min(1, Math.log1p(interactions365) / Math.log(20));
+  // Blend 70/30 — recency dominates because old-but-frequent doesn't beat
+  // a recent reach-out for the "should I touch base?" question.
+  const score = Math.round((0.7 * recency + 0.3 * freq) * 100);
   const band =
     BAND_CUTOFFS.find(([cutoff]) => score >= cutoff)?.[1] ?? "dormant";
-  return { score, band, daysSince: days };
+  return { score, band, daysSince: days, interactions365 };
 }
 
 export function bandColor(band: FreshnessBand): string {

@@ -6,26 +6,32 @@ const daysAgo = (d: number) => new Date(NOW.getTime() - d * 86400_000);
 
 describe("computeFreshness", () => {
   it("unknown when no lastSeen", () => {
-    const r = computeFreshness(null, NOW);
+    const r = computeFreshness({ lastSeenAt: null, interactions365: 0 }, NOW);
     expect(r.band).toBe("unknown");
     expect(r.score).toBe(0);
   });
-  it("fresh near today", () => {
-    expect(computeFreshness(daysAgo(0), NOW).band).toBe("fresh");
+  it("fresh near today with any frequency", () => {
+    const r = computeFreshness(
+      { lastSeenAt: daysAgo(2), interactions365: 6 },
+      NOW,
+    );
+    expect(r.band).toBe("fresh");
   });
-  it("warm at ~30 days", () => {
-    const b = computeFreshness(daysAgo(30), NOW).band;
-    expect(["fresh", "warm"]).toContain(b);
+  it("frequency lifts a stale lastSeen above pure recency", () => {
+    const stale = computeFreshness(
+      { lastSeenAt: daysAgo(120), interactions365: 0 },
+      NOW,
+    );
+    const stale_freq = computeFreshness(
+      { lastSeenAt: daysAgo(120), interactions365: 12 },
+      NOW,
+    );
+    expect(stale_freq.score).toBeGreaterThan(stale.score);
   });
-  it("fading around 90 days", () => {
-    const b = computeFreshness(daysAgo(120), NOW).band;
-    expect(["warm", "fading"]).toContain(b);
-  });
-  it("cold around 365 days", () => {
-    const b = computeFreshness(daysAgo(365), NOW).band;
-    expect(["fading", "cold", "dormant"]).toContain(b);
-  });
-  it("dormant after 2 years", () => {
-    expect(computeFreshness(daysAgo(900), NOW).band).toBe("dormant");
+  it("dormant when ancient", () => {
+    expect(
+      computeFreshness({ lastSeenAt: daysAgo(900), interactions365: 0 }, NOW)
+        .band,
+    ).toBe("dormant");
   });
 });
