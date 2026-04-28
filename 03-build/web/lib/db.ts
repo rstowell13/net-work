@@ -7,7 +7,10 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "@/db/schema";
 
-const databaseUrl = process.env.DATABASE_URL;
+// Prefer the transaction-mode pooler (Supabase port 6543) when it's
+// configured — far higher concurrency than the session-mode pooler
+// (port 5432, pool_size=15) which exhausts under serverless.
+const databaseUrl = process.env.DATABASE_URL_POOLED ?? process.env.DATABASE_URL;
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is not set");
 }
