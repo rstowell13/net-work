@@ -222,6 +222,8 @@ export async function listContacts(
           return d >= 90 && d < 365;
         case "365_plus":
           return d >= 365;
+        default:
+          return true;
       }
     });
   }
