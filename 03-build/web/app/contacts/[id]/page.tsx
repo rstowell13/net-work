@@ -525,12 +525,12 @@ function MetaBlock({
       >
         {title}
       </p>
-      <p
+      <div
         className="m-0 text-[13px] leading-[1.55] tabular-nums"
         style={{ color: "var(--ink-muted)" }}
       >
         {children}
-      </p>
+      </div>
     </div>
   );
 }
