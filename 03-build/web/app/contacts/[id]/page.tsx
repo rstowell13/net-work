@@ -94,11 +94,18 @@ export default async function ContactDetailPage({
   });
 
   // Generate relationship summary lazily — cached by inputs hash.
-  const summary = await getOrGenerateRelationshipSummary(id, {
-    contactName: contact.displayName,
-    category: contact.category,
-    ...relInputs,
-  });
+  // Never let an LLM failure (rate limit, timeout, network) crash the page.
+  let summary: Awaited<ReturnType<typeof getOrGenerateRelationshipSummary>> = null;
+  let summaryError: string | null = null;
+  try {
+    summary = await getOrGenerateRelationshipSummary(id, {
+      contactName: contact.displayName,
+      category: contact.category,
+      ...relInputs,
+    });
+  } catch (e) {
+    summaryError = (e as Error).message ?? "Summary generation failed";
+  }
 
   const openFollowUps = followUps.filter((f) => f.status === "open");
 
@@ -265,7 +272,7 @@ export default async function ContactDetailPage({
               </div>
             </>
           ) : (
-            <SummaryUnavailable contactId={contact.id} />
+            <SummaryUnavailable contactId={contact.id} error={summaryError} />
           )}
         </section>
 
@@ -593,7 +600,13 @@ function formatRelative(d: Date, now: number): string {
   return `${days}d ago`;
 }
 
-function SummaryUnavailable({ contactId }: { contactId: string }) {
+function SummaryUnavailable({
+  contactId,
+  error,
+}: {
+  contactId: string;
+  error?: string | null;
+}) {
   return (
     <div
       className="rounded-md border p-4 text-[13px] leading-[1.5]"
@@ -603,12 +616,21 @@ function SummaryUnavailable({ contactId }: { contactId: string }) {
         color: "var(--ink-muted)",
       }}
     >
-      <p className="m-0">
-        Relationship summary requires{" "}
-        <code style={{ color: "var(--brass-deep)" }}>OPENROUTER_API_KEY</code>{" "}
-        to be set in your Vercel environment. Once configured, click regenerate
-        below.
-      </p>
+      {error ? (
+        <p className="m-0">
+          Summary generation failed:{" "}
+          <code style={{ color: "var(--cold-red)" }}>{error}</code>. Try
+          regenerating; if it keeps failing, check the OpenRouter status or
+          the API key.
+        </p>
+      ) : (
+        <p className="m-0">
+          Relationship summary requires{" "}
+          <code style={{ color: "var(--brass-deep)" }}>OPENROUTER_API_KEY</code>{" "}
+          to be set in your Vercel environment. Once configured, click
+          regenerate below.
+        </p>
+      )}
       <div className="mt-2">
         <RegenerateSummaryButton contactId={contactId} />
       </div>
