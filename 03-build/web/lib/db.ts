@@ -12,7 +12,14 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL is not set");
 }
 
-// One connection in dev (HMR safe), pooled in prod
+// One connection per process — both in dev (HMR safe) and in prod
+// (serverless functions are short-lived and the Supabase pooler in
+// session mode caps at 15 clients). Multiple connections per function
+// stack up fast across parallel Vercel invocations and exhaust the pool
+// — `EMAXCONNSESSION: max clients reached in session mode`.
+//
+// `idle_timeout: 20` and `max_lifetime` keep the connection short so it
+// returns to the pooler quickly between invocations.
 const globalForDb = globalThis as unknown as {
   pgClient?: ReturnType<typeof postgres>;
 };
@@ -20,8 +27,10 @@ const globalForDb = globalThis as unknown as {
 const client =
   globalForDb.pgClient ??
   postgres(databaseUrl, {
-    max: process.env.NODE_ENV === "production" ? 10 : 1,
+    max: 1,
     prepare: false,
+    idle_timeout: 20,
+    max_lifetime: 60 * 30,
   });
 
 if (process.env.NODE_ENV !== "production") globalForDb.pgClient = client;
