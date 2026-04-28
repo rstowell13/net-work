@@ -35,9 +35,9 @@ Before code can begin. I'll guide him through each on day 1.
 
 ## Project state
 
-- **Current phase:** Phase 4 (Build) — Milestones 1–2 complete; starting M3 (Mac agent).
+- **Current phase:** Phase 4 (Build) — Milestones 1–3 complete; M4 (Merge) is next.
 - **Last updated:** 2026-04-27.
-- **Next action:** Begin Milestone 3 — Mac-side agent for Apple Contacts + iMessage + Call History ingestion.
+- **Next action:** Begin Milestone 4 — auto-grouped merge candidates + bulk-merge UI.
 
 ---
 
@@ -165,18 +165,18 @@ Before code can begin. I'll guide him through each on day 1.
 
 ### Tasks
 
-- [ ] **3.1 Investigate macOS Continuity call-history availability.** Verify on Robb's Mac whether `CallHistory.storedata` exists with iPhone calls. If not present, log + report; call-log support is best-effort for v1. (BRIEF flagged this risk.)
-- [ ] **3.2 Implement Apple Contacts reader** via `pyobjc` AddressBook — emit list of `{external_id, name, phones, emails, photo_b64}` dicts.
-- [ ] **3.3 Implement iMessage reader.** Read `chat.db`, group messages into threads using **8-hour gap rule** in Python (matches DATA_MODEL spec), emit per-message + per-thread payloads. Watermark by `ROWID`.
-- [ ] **3.4 Implement Call History reader** if available. Watermark by `ZDATE`.
-- [ ] **3.5 Build pusher** — batches of 200 records per POST, signed with a bearer token, exponential backoff on 5xx, idempotent (web-side dedupes by `external_id`).
-- [ ] **3.6 Build web-side ingestion endpoints** at `app/api/ingest/contacts`, `/messages`, `/calls`. Authenticate by `AgentToken.token_hash`. Validate payload shape. Upsert into RawContact / Message / MessageThread / CallLog.
-- [ ] **3.7 Build the agent installer.** `installer.sh` clones the agent repo, creates a venv, installs deps (`pyobjc`, `requests`), drops the LaunchAgent plist into `~/Library/LaunchAgents`, registers it with `launchctl bootstrap`. The token is templated into the plist at install time.
-- [ ] **3.8 Surface install command on `/settings/sources`** — generate a fresh `AgentToken`, render a one-line `curl ... | bash` install command Robb can paste, hide it after first install completes.
-- [ ] **3.9 Surface agent status** on `/settings/sources` — last push timestamp, agent hostname, pending records.
-- [ ] **3.10 Wire iMessage threads to RawContact matching by phone.** A message arrives for `+14155550142` → look up RawContact with that phone → link Message.contact_id. Unmatched messages remain dangling and re-link on later sync.
-- [ ] **3.11 Smoke test end-to-end.** Robb runs the installer; within a minute his Apple Contacts (likely the largest single source) appear. Within 5 minutes iMessage history is pushed.
-- [ ] **3.12 Commit + tag `m3-mac-agent`.**
+- [x] **3.1 Investigate macOS Continuity call-history availability.** Verify on Robb's Mac whether `CallHistory.storedata` exists with iPhone calls. If not present, log + report; call-log support is best-effort for v1. (BRIEF flagged this risk.)
+- [x] **3.2 Implement Apple Contacts reader** via `pyobjc` AddressBook — emit list of `{external_id, name, phones, emails, photo_b64}` dicts.
+- [x] **3.3 Implement iMessage reader.** Read `chat.db`, group messages into threads using **8-hour gap rule** in Python (matches DATA_MODEL spec), emit per-message + per-thread payloads. Watermark by `ROWID`.
+- [x] **3.4 Implement Call History reader** if available. Watermark by `ZDATE`.
+- [x] **3.5 Build pusher** — batches of 200 records per POST, signed with a bearer token, exponential backoff on 5xx, idempotent (web-side dedupes by `external_id`).
+- [x] **3.6 Build web-side ingestion endpoints** at `app/api/ingest/contacts`, `/messages`, `/calls`. Authenticate by `AgentToken.token_hash`. Validate payload shape. Upsert into RawContact / Message / MessageThread / CallLog.
+- [x] **3.7 Build the agent installer.** `installer.sh` clones the agent repo, creates a venv, installs deps (`pyobjc`, `requests`), drops the LaunchAgent plist into `~/Library/LaunchAgents`, registers it with `launchctl bootstrap`. The token is templated into the plist at install time.
+- [x] **3.8 Surface install command on `/settings/sources`** — generate a fresh `AgentToken`, render a one-line `curl ... | bash` install command Robb can paste, hide it after first install completes.
+- [x] **3.9 Surface agent status** on `/settings/sources` — last push timestamp, agent hostname, pending records.
+- [x] **3.10 Wire iMessage threads to RawContact matching by phone.** A message arrives for `+14155550142` → look up RawContact with that phone → link Message.contact_id. Unmatched messages remain dangling and re-link on later sync.
+- [x] **3.11 Smoke test end-to-end.** Robb runs the installer; within a minute his Apple Contacts (likely the largest single source) appear. Within 5 minutes iMessage history is pushed.
+- [x] **3.12 Commit + tag `m3-mac-agent`.**
 
 **Verification:** RawContact count jumps after Apple Contacts pushes. Message + MessageThread tables populated. `chat.db` reads are read-only. Agent runs nightly via LaunchAgent.
 
