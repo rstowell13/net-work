@@ -69,7 +69,11 @@ export async function syncGoogleContacts(sourceId: string) {
               (u.value ?? "").toLowerCase().includes("linkedin.com"),
             )?.value ?? null;
 
-          const avatarUrl = p.photos?.[0]?.url ?? null;
+          // Skip Google's default placeholder photos (colored circle with
+           // first initial). Their `default: true` flag tells us the URL
+           // points to a generic avatar, not a real user-uploaded photo.
+          const avatarUrl =
+            p.photos?.find((ph) => !ph.default && ph.url)?.url ?? null;
 
           // Upsert. The unique index is (source_id, external_id), so
           // we can use ON CONFLICT.

@@ -30,6 +30,14 @@ export function Avatar({
   }, []);
 
   const trimmedUrl = photoUrl?.trim();
+  // Google Contacts often sends a "default" placeholder photo (colored
+  // circle with white first initial) for contacts without real photos.
+  // Those URLs live under the `/a/` path; real photos are under
+  // `/contacts/`. Treat the default as missing so we render our monogram.
+  const isGoogleDefault =
+    !!trimmedUrl &&
+    /lh\d+\.googleusercontent\.com\/a\//.test(trimmedUrl);
+  const useImg = !!trimmedUrl && !isGoogleDefault && !failed;
   const s = SIZES[size];
   const style: React.CSSProperties = {
     width: s.w,
@@ -48,7 +56,7 @@ export function Avatar({
     overflow: "hidden",
     flexShrink: 0,
   };
-  if (trimmedUrl && !failed) {
+  if (useImg) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
