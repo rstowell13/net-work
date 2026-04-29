@@ -203,24 +203,12 @@ export function ContactsList({ rows }: { rows: SerializedRow[] }) {
                   <span className="truncate text-[17px] font-semibold tracking-[-0.018em]">
                     {row.displayName}
                   </span>
-                  <div
-                    className="flex items-center gap-2 truncate text-[12px] tabular-nums"
+                  <span
+                    className="truncate text-[12px] tabular-nums"
                     style={{ color: "var(--ink-faint)" }}
                   >
-                    <span className="truncate">
-                      {row.primaryEmail ?? row.primaryPhone ?? "—"}
-                    </span>
-                    <span aria-hidden style={{ opacity: 0.5 }}>·</span>
-                    <span
-                      className="shrink-0"
-                      style={{
-                        color: isCold ? "var(--cold-red)" : undefined,
-                        fontWeight: isCold ? 600 : undefined,
-                      }}
-                    >
-                      {days === null ? "—" : `${days}d`}
-                    </span>
-                  </div>
+                    {row.primaryEmail ?? row.primaryPhone ?? "—"}
+                  </span>
                   <div className="flex flex-wrap items-center gap-1.5">
                     {row.category ? (
                       <span
@@ -244,8 +232,17 @@ export function ContactsList({ rows }: { rows: SerializedRow[] }) {
                     ))}
                   </div>
                 </div>
-                <div className="shrink-0">
+                <div className="flex w-16 shrink-0 flex-col items-center gap-1">
                   <FreshnessRing result={row.freshness} size="md" />
+                  <span
+                    className="text-[11px] tabular-nums"
+                    style={{
+                      color: isCold ? "var(--cold-red)" : "var(--ink-muted)",
+                      fontWeight: isCold ? 600 : undefined,
+                    }}
+                  >
+                    {days === null ? "—" : `${days}d`}
+                  </span>
                 </div>
               </Link>
             );
