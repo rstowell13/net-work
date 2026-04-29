@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Week mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..144,500;1,8..60,500;1,8..144,500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    color-scheme: dark;
+    --stone:#1f1a14; --raised:#2c2519; --sunken:#3a2f23;
+    --ink:#e8e2d4; --muted:#c3b99f; --faint:#857a61;
+    --rule:#3a2f23; --brass:#876522; --brass-deep:#c9a861; --brass-soft:#ece2c0;
+    --fresh:#7ea758; --fading:#d2a83a; --cold:#d4673a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--stone); color: var(--ink); font: 16px/1.5 -apple-system,BlinkMacSystemFont,system-ui,sans-serif; }
+  .serif { font-family: "Source Serif 4", Georgia, serif; font-style: italic; font-weight: 500; }
+  main { max-width: 420px; margin: 0 auto; padding: 24px 16px 48px; }
+  h2.section { margin: 32px 0 12px; font-size: 22px; }
+  .label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+  .note { font-size: 12px; color: var(--faint); margin: 4px 0 16px; }
+  .divider { height: 1px; background: var(--rule); margin: 20px 0; }
+
+  /* === HEADER (condensed stats) === */
+  .pretitle { display:flex; align-items:center; gap:8px; font-size:11px; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; color:var(--faint); margin-bottom:14px; }
+  .pretitle::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--brass); }
+  .hero-title { margin:0; font-size: clamp(40px, 11vw, 56px); line-height: 0.95; letter-spacing: -0.03em; }
+  .hero-title .accent { color: var(--brass-deep); }
+
+  /* New condensed stat strip: 4 inline metrics with tiny labels above */
+  .stat-strip { display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; margin-top:18px; padding:14px 0; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); }
+  .stat { display:flex; flex-direction:column; gap:3px; }
+  .stat .lbl { font-size: 9.5px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--faint); }
+  .stat .num { font-size: 22px; font-weight: 600; letter-spacing:-0.01em; font-variant-numeric: tabular-nums; }
+  .stat .num .of { font-size: 11px; color: var(--faint); font-weight: 500; margin-left: 2px; }
+
+  /* === PLAN HEADING === */
+  .plan-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin: 28px 0 14px; }
+  .plan-head h2 { margin:0; font-size:28px; }
+  .plan-head .sub { font-size: 11px; color: var(--faint); }
+
+  /* === CARD === */
+  .card { background: var(--raised); border: 1px solid var(--rule); border-radius: 16px; padding: 16px; display:flex; flex-direction:column; gap:14px; }
+  .card + .card { margin-top: 12px; }
+
+  /* Row 1: avatar + name + ring */
+  .row1 { display:grid; grid-template-columns: 56px 1fr auto; align-items:center; gap:14px; }
+  .avatar { width:56px; height:56px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--stone); font-size:22px; }
+  .avatar.b1 { background:#3e5e5a; }
+  .avatar.b2 { background:#722f3a; }
+  .avatar.b3 { background:#5a7a3a; }
+  .name { margin:0; font-size: clamp(22px, 6.2vw, 26px); line-height:1.05; letter-spacing:-0.018em; }
+
+  .ring-stack { display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .ring { width:36px; height:36px; border-radius:50%; border:3px solid var(--rule); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; tabular-nums:1; position:relative; }
+  .ring.dormant { border-color: var(--cold); color: var(--cold); }
+  .ring-label { font-size: 9px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color: var(--cold); }
+
+  /* Row 2: meta chips */
+  .meta { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size: 12px; color: var(--faint); }
+  .chip { display:inline-flex; align-items:center; gap:4px; padding: 2px 8px; border-radius: 4px; background: var(--sunken); color: var(--muted); font-size: 10.5px; font-weight: 600; letter-spacing:0.04em; text-transform:uppercase; }
+  .meta .dot { width:3px; height:3px; border-radius:50%; background: var(--faint); }
+
+  /* Row 3: plan context */
+  .context { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+
+  /* Row 4: action toggles */
+  .actions { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-top: 12px; border-top: 1px solid var(--rule); }
+  .toggle { display:flex; align-items:center; gap:8px; padding: 10px 12px; background: var(--sunken); border:1px solid var(--rule); border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--muted); }
+  .toggle .check { width:16px; height:16px; border-radius:4px; border:1.5px solid var(--faint); flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+  .toggle.checked { background: var(--ink); color: var(--stone); border-color: var(--ink); }
+  .toggle.checked .check { background: var(--stone); border-color: var(--stone); }
+  .toggle.checked .check::after { content:""; width:8px; height:5px; border-left: 2px solid var(--ink); border-bottom: 2px solid var(--ink); transform: rotate(-45deg) translate(1px, -1px); }
+  .toggle.connected.checked { background: var(--fresh); color: var(--stone); border-color: var(--fresh); }
+
+  /* Notes panel */
+  .notes { margin-top: 32px; padding: 14px 16px; background: var(--raised); border:1px solid var(--rule); border-radius: 12px; font-size: 12.5px; line-height: 1.55; color: var(--muted); }
+  .notes b { color: var(--ink); }
+</style>
+</head>
+<body>
+<main>
+
+  <p class="pretitle">Week 18, 2026 · 4 days remain</p>
+  <h1 class="serif hero-title">This week,<br><span class="accent">five</span> people.</h1>
+
+  <!-- Condensed stat strip (replaces big 2x2 grid of giant serif numerals) -->
+  <div class="stat-strip">
+    <div class="stat"><span class="lbl">Reached</span><span class="num">0<span class="of">/5</span></span></div>
+    <div class="stat"><span class="lbl">Connected</span><span class="num">0<span class="of">/5</span></span></div>
+    <div class="stat"><span class="lbl">Follow-ups</span><span class="num">0</span></div>
+    <div class="stat"><span class="lbl">Triaged</span><span class="num">300<span class="of">/1078</span></span></div>
+  </div>
+
+  <div class="plan-head">
+    <h2 class="serif">Your plan</h2>
+    <span class="sub">commit Sun · expires Sat 23:59</span>
+  </div>
+
+  <!-- Card 1 -->
+  <article class="card">
+    <div class="row1">
+      <div class="avatar b1 serif">JL</div>
+      <h3 class="name serif">Jeff Lindfors</h3>
+      <div class="ring-stack">
+        <div class="ring dormant">0</div>
+        <span class="ring-label">Dormant</span>
+      </div>
+    </div>
+    <div class="meta">
+      <span class="chip">Personal</span>
+      <span class="dot"></span>
+      <span>last seen 1368d ago</span>
+    </div>
+    <p class="context">Plan to reach out this week.</p>
+    <div class="actions">
+      <button class="toggle"><span class="check"></span>Reached out</button>
+      <button class="toggle connected"><span class="check"></span>Connected</button>
+    </div>
+  </article>
+
+  <!-- Card 2: example with reached -->
+  <article class="card">
+    <div class="row1">
+      <div class="avatar b2 serif">DS</div>
+      <h3 class="name serif">Dad Stowell</h3>
+      <div class="ring-stack">
+        <div class="ring dormant">0</div>
+        <span class="ring-label">Dormant</span>
+      </div>
+    </div>
+    <div class="meta">
+      <span class="chip">Personal</span>
+      <span class="dot"></span>
+      <span>last seen 2656d ago</span>
+    </div>
+    <p class="context">Plan to reach out this week.</p>
+    <div class="actions">
+      <button class="toggle checked"><span class="check"></span>Reached out</button>
+      <button class="toggle connected"><span class="check"></span>Connected</button>
+    </div>
+  </article>
+
+  <!-- Card 3: example with both checked (connected) -->
+  <article class="card">
+    <div class="row1">
+      <div class="avatar b3 serif">BW</div>
+      <h3 class="name serif">Brig Wilson</h3>
+      <div class="ring-stack">
+        <div class="ring dormant">0</div>
+        <span class="ring-label">Dormant</span>
+      </div>
+    </div>
+    <div class="meta">
+      <span class="chip">Both</span>
+      <span class="dot"></span>
+      <span>last seen 2440d ago</span>
+    </div>
+    <p class="context">Plan to reach out this week.</p>
+    <div class="actions">
+      <button class="toggle checked"><span class="check"></span>Reached out</button>
+      <button class="toggle connected checked"><span class="check"></span>Connected</button>
+    </div>
+  </article>
+
+  <div class="notes">
+    <b>What changed vs the live page</b><br>
+    1. Stats: condensed into a single 4-column strip with hairline rules above/below. Numbers are 22px sans (tabular) instead of giant 36px serif — saves ~80px of vertical space and stops competing with the title.<br><br>
+    <b>2.</b> Cards: name now has full width on its own row (with avatar to the left, ring to the right). No truncation.<br>
+    <b>3.</b> Meta moved to a slim chip row (Personal · last seen 1368d ago) — smaller and more scannable.<br>
+    <b>4.</b> Action buttons stretch full-width as a 2-up grid below a divider so they read like a clear "did this happen?" tracker. Reached uses ink fill, Connected uses fresh-green when active.<br><br>
+    Tap the toggles in cards 2 & 3 to see how the active states look.
+  </div>
+
+</main>
+</body>
+</html>
