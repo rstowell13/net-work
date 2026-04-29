@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { avatarColorVar, initials } from "@/lib/avatar-color";
 
 const SIZES = {
@@ -21,6 +21,15 @@ export function Avatar({
   size?: keyof typeof SIZES;
 }) {
   const [failed, setFailed] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+  // The browser may load and fail the SSR-rendered <img> before React
+  // hydrates and attaches onError, so check on mount.
+  useEffect(() => {
+    const el = imgRef.current;
+    if (el && el.complete && el.naturalWidth === 0) setFailed(true);
+  }, []);
+
+  const trimmedUrl = photoUrl?.trim();
   const s = SIZES[size];
   const style: React.CSSProperties = {
     width: s.w,
@@ -39,17 +48,22 @@ export function Avatar({
     overflow: "hidden",
     flexShrink: 0,
   };
-  if (photoUrl && !failed) {
+  if (trimmedUrl && !failed) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={photoUrl}
-        alt={name ?? "contact"}
+        ref={imgRef}
+        src={trimmedUrl}
+        alt=""
         referrerPolicy="no-referrer"
         onError={() => setFailed(true)}
         style={{ ...style, objectFit: "cover" }}
       />
     );
   }
-  return <div style={style}>{initials(name)}</div>;
+  return (
+    <div style={style} aria-label={name ?? "contact"}>
+      {initials(name)}
+    </div>
+  );
 }
