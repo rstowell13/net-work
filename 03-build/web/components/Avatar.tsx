@@ -1,3 +1,5 @@
+"use client";
+import { useState } from "react";
 import { avatarColorVar, initials } from "@/lib/avatar-color";
 
 const SIZES = {
@@ -18,6 +20,7 @@ export function Avatar({
   photoUrl?: string | null;
   size?: keyof typeof SIZES;
 }) {
+  const [failed, setFailed] = useState(false);
   const s = SIZES[size];
   const style: React.CSSProperties = {
     width: s.w,
@@ -36,12 +39,14 @@ export function Avatar({
     overflow: "hidden",
     flexShrink: 0,
   };
-  if (photoUrl) {
+  if (photoUrl && !failed) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={photoUrl}
         alt={name ?? "contact"}
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
         style={{ ...style, objectFit: "cover" }}
       />
     );
