@@ -160,7 +160,7 @@ export function ContactsList({ rows }: { rows: SerializedRow[] }) {
               <Link
                 key={row.id}
                 href={`/contacts/${row.id}`}
-                className="flex gap-3 border-b px-3 py-3.5 transition-colors active:bg-[var(--stone-raised)]"
+                className="flex items-center gap-3 border-b px-3 py-4 transition-colors active:bg-[var(--stone-raised)]"
                 style={{
                   background: isSel ? "var(--brass-soft)" : undefined,
                   borderColor: "var(--rule)",
@@ -172,7 +172,7 @@ export function ContactsList({ rows }: { rows: SerializedRow[] }) {
                     e.stopPropagation();
                     toggle(row.id);
                   }}
-                  className="-m-1 flex h-7 w-7 shrink-0 items-center justify-center self-start p-1"
+                  className="-m-2 flex h-9 w-9 shrink-0 items-center justify-center p-2"
                   aria-label="select"
                 >
                   <span
@@ -197,23 +197,22 @@ export function ContactsList({ rows }: { rows: SerializedRow[] }) {
                   id={row.id}
                   name={row.displayName}
                   photoUrl={row.photoUrl}
-                  size="md"
+                  size="lg"
                 />
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <div className="flex items-start gap-2">
-                    <span className="min-w-0 flex-1 truncate text-[16px] font-semibold tracking-[-0.018em]">
-                      {row.displayName}
-                    </span>
-                    <FreshnessRing result={row.freshness} size="sm" />
-                  </div>
+                  <span className="truncate text-[17px] font-semibold tracking-[-0.018em]">
+                    {row.displayName}
+                  </span>
                   <div
-                    className="flex items-center gap-2 text-[11.5px] tabular-nums"
+                    className="flex items-center gap-2 truncate text-[12px] tabular-nums"
                     style={{ color: "var(--ink-faint)" }}
                   >
-                    <span className="min-w-0 flex-1 truncate">
+                    <span className="truncate">
                       {row.primaryEmail ?? row.primaryPhone ?? "—"}
                     </span>
+                    <span aria-hidden style={{ opacity: 0.5 }}>·</span>
                     <span
+                      className="shrink-0"
                       style={{
                         color: isCold ? "var(--cold-red)" : undefined,
                         fontWeight: isCold ? 600 : undefined,
@@ -244,6 +243,9 @@ export function ContactsList({ rows }: { rows: SerializedRow[] }) {
                       </span>
                     ))}
                   </div>
+                </div>
+                <div className="shrink-0">
+                  <FreshnessRing result={row.freshness} size="md" />
                 </div>
               </Link>
             );
