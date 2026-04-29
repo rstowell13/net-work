@@ -73,7 +73,7 @@ export function ContactsList({ rows }: { rows: SerializedRow[] }) {
   return (
     <>
       <div
-        className="flex flex-wrap items-center gap-3 border-b py-3.5"
+        className="flex flex-wrap items-center gap-2 border-b py-3.5"
         style={{ borderColor: "var(--rule)" }}
       >
         <span
@@ -138,26 +138,6 @@ export function ContactsList({ rows }: { rows: SerializedRow[] }) {
         </select>
       </div>
 
-      <div className="-mx-4 overflow-x-auto md:mx-0">
-      <div className="min-w-[800px]">
-      <header
-        className="grid h-9 items-center gap-[18px] border-b px-3 text-[11px] font-semibold uppercase tracking-[0.12em]"
-        style={{
-          gridTemplateColumns:
-            "24px 44px minmax(180px, 2fr) 100px minmax(120px, 1.5fr) 100px 110px",
-          borderColor: "var(--rule)",
-          color: "var(--ink-faint)",
-        }}
-      >
-        <div />
-        <div />
-        <div>Name</div>
-        <div>Category</div>
-        <div>Tags</div>
-        <div className="text-center">Fresh</div>
-        <div className="text-right">Last seen</div>
-      </header>
-
       {sorted.length === 0 ? (
         <p
           className="px-3 py-8 text-[13px]"
@@ -166,7 +146,128 @@ export function ContactsList({ rows }: { rows: SerializedRow[] }) {
           No contacts match these filters yet.
         </p>
       ) : (
-        sorted.map((row) => {
+        <>
+        <div className="md:hidden">
+          {sorted.map((row) => {
+            const isSel = selected.has(row.id);
+            const last = row.lastSeenISO ? new Date(row.lastSeenISO) : null;
+            const days =
+              last && now
+                ? Math.floor((now - last.getTime()) / 86400_000)
+                : null;
+            const isCold = days !== null && days >= 180;
+            return (
+              <Link
+                key={row.id}
+                href={`/contacts/${row.id}`}
+                className="flex gap-3 border-b px-3 py-3.5 transition-colors active:bg-[var(--stone-raised)]"
+                style={{
+                  background: isSel ? "var(--brass-soft)" : undefined,
+                  borderColor: "var(--rule)",
+                }}
+              >
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggle(row.id);
+                  }}
+                  className="-m-1 flex h-7 w-7 shrink-0 items-center justify-center self-start p-1"
+                  aria-label="select"
+                >
+                  <span
+                    className="flex h-4 w-4 items-center justify-center rounded-sm border-[1.5px]"
+                    style={{
+                      background: isSel ? "var(--ink)" : "transparent",
+                      borderColor: isSel ? "var(--ink)" : "var(--rule)",
+                    }}
+                  >
+                    {isSel && (
+                      <svg viewBox="0 0 16 16" width="11" height="11" fill="none">
+                        <path
+                          d="M3 8.5l3.5 3.5L13 5"
+                          stroke="var(--stone)"
+                          strokeWidth={2.5}
+                        />
+                      </svg>
+                    )}
+                  </span>
+                </button>
+                <Avatar
+                  id={row.id}
+                  name={row.displayName}
+                  photoUrl={row.photoUrl}
+                  size="md"
+                />
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <div className="flex items-start gap-2">
+                    <span className="min-w-0 flex-1 truncate text-[16px] font-semibold tracking-[-0.018em]">
+                      {row.displayName}
+                    </span>
+                    <FreshnessRing result={row.freshness} size="sm" />
+                  </div>
+                  <div
+                    className="flex items-center gap-2 text-[11.5px] tabular-nums"
+                    style={{ color: "var(--ink-faint)" }}
+                  >
+                    <span className="min-w-0 flex-1 truncate">
+                      {row.primaryEmail ?? row.primaryPhone ?? "—"}
+                    </span>
+                    <span
+                      style={{
+                        color: isCold ? "var(--cold-red)" : undefined,
+                        fontWeight: isCold ? 600 : undefined,
+                      }}
+                    >
+                      {days === null ? "—" : `${days}d`}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {row.category ? (
+                      <span
+                        className="rounded px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.04em]"
+                        style={catChipStyle(row.category)}
+                      >
+                        {row.category}
+                      </span>
+                    ) : null}
+                    {row.sources.slice(0, 2).map((s) => (
+                      <span
+                        key={s}
+                        className="whitespace-nowrap rounded px-1.5 py-0.5 text-[10.5px] font-medium"
+                        style={{
+                          background: "var(--stone-sunken)",
+                          color: "var(--ink-muted)",
+                        }}
+                      >
+                        {s.replace(/_/g, " ")}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+        <div className="hidden md:block">
+        <header
+          className="grid h-9 items-center gap-[18px] border-b px-3 text-[11px] font-semibold uppercase tracking-[0.12em]"
+          style={{
+            gridTemplateColumns:
+              "24px 44px minmax(180px, 2fr) 100px minmax(120px, 1.5fr) 100px 110px",
+            borderColor: "var(--rule)",
+            color: "var(--ink-faint)",
+          }}
+        >
+          <div />
+          <div />
+          <div>Name</div>
+          <div>Category</div>
+          <div>Tags</div>
+          <div className="text-center">Fresh</div>
+          <div className="text-right">Last seen</div>
+        </header>
+        {sorted.map((row) => {
           const isSel = selected.has(row.id);
           const last = row.lastSeenISO ? new Date(row.lastSeenISO) : null;
           const days =
@@ -272,10 +373,10 @@ export function ContactsList({ rows }: { rows: SerializedRow[] }) {
               </div>
             </Link>
           );
-        })
+        })}
+        </div>
+        </>
       )}
-      </div>
-      </div>
     </>
   );
 }
