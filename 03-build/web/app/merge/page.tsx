@@ -26,7 +26,7 @@ export default async function MergePage() {
     <AppShell active="/merge">
       <div className="mx-auto max-w-[1280px] px-4 pb-24 pt-6 md:px-14 md:pt-8">
         <section
-          className="grid gap-12 border-b pb-8"
+          className="flex flex-col gap-6 border-b pb-8 md:grid md:gap-12"
           style={{
             gridTemplateColumns: "minmax(0, 1.5fr) auto",
             alignItems: "end",
@@ -46,7 +46,7 @@ export default async function MergePage() {
                 fontFamily: "var(--font-serif, 'Source Serif 4'), Georgia, serif",
                 fontStyle: "italic",
                 fontWeight: 500,
-                fontSize: "clamp(56px, 7vw, 88px)",
+                fontSize: "clamp(44px, 12vw, 88px)",
                 lineHeight: 0.94,
                 letterSpacing: "-0.025em",
                 fontVariationSettings: "'opsz' 144",
@@ -55,7 +55,7 @@ export default async function MergePage() {
               Merge.
             </h1>
           </div>
-          <div className="flex gap-7">
+          <div className="grid grid-cols-4 gap-3 md:flex md:gap-7">
             <Stat label="Pending" value={stats.pending} />
             <Stat label="Exact" value={stats.exact} tone="exact" />
             <Stat label="High" value={stats.high} tone="high" />
