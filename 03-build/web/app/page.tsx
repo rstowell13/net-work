@@ -74,7 +74,7 @@ export default async function HomePage() {
               of={`of ${home.total}`}
             />
             <MetaBlock
-              h="Open follow-ups"
+              h="Follow-ups"
               n={home.openFollowUps}
               of={
                 home.overdueFollowUps > 0
@@ -343,7 +343,7 @@ function MetaBlock({
   return (
     <div className="flex flex-col gap-0.5 md:gap-1">
       <span
-        className="text-[9.5px] font-semibold uppercase tracking-[0.12em] md:text-[10.5px] md:tracking-[0.14em]"
+        className="whitespace-nowrap text-[9.5px] font-semibold uppercase tracking-[0.12em] md:text-[10.5px] md:tracking-[0.14em]"
         style={{ color: "var(--ink-faint)" }}
       >
         {h}
