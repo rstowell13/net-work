@@ -131,82 +131,68 @@ export default async function ContactDetailPage({
         </nav>
 
         <section
-          className="flex flex-col gap-6 border-b pb-9 md:grid md:items-end md:gap-14"
-          style={{
-            gridTemplateColumns: "minmax(0, 1.5fr) auto",
-            borderColor: "var(--rule)",
-          }}
+          className="border-b pb-7 md:pb-10"
+          style={{ borderColor: "var(--rule)" }}
         >
-          <div className="flex flex-col gap-4">
-            <div
-              className="flex flex-wrap items-center gap-2.5 text-[12.5px] tabular-nums"
-              style={{ color: "var(--ink-faint)" }}
+          <div className="flex items-center gap-4 md:gap-7">
+            <Avatar
+              id={contact.id}
+              name={contact.displayName}
+              photoUrl={contact.photoUrl}
+              size="xl"
+            />
+            <h1
+              className="m-0 min-w-0 flex-1 break-words"
+              style={{
+                fontFamily:
+                  "var(--font-serif, 'Source Serif 4'), Georgia, serif",
+                fontStyle: "italic",
+                fontWeight: 500,
+                fontSize: "clamp(34px, 8.5vw, 88px)",
+                lineHeight: 0.95,
+                letterSpacing: "-0.03em",
+                fontVariationSettings: "'opsz' 144",
+              }}
             >
-              {contact.category && (
-                <>
-                  <span
-                    className="rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.04em]"
-                    style={{
-                      background: "var(--ink)",
-                      color: "var(--stone)",
-                    }}
-                  >
-                    {contact.category}
-                  </span>
-                  <Dot />
-                </>
-              )}
-              {daysSince !== null && (
-                <>
-                  <span>last seen {daysSince}d ago</span>
-                  <Dot />
-                </>
-              )}
-              <span>
-                {diary.length} entr{diary.length === 1 ? "y" : "ies"}
-              </span>
-            </div>
-            <div className="flex items-center gap-4 md:gap-6">
-              <Avatar
-                id={contact.id}
-                name={contact.displayName}
-                photoUrl={contact.photoUrl}
-                size="xl"
-              />
-              <h1
-                className="m-0 min-w-0 break-words"
-                style={{
-                  fontFamily:
-                    "var(--font-serif, 'Source Serif 4'), Georgia, serif",
-                  fontStyle: "italic",
-                  fontWeight: 500,
-                  fontSize: "clamp(36px, 9vw, 96px)",
-                  lineHeight: 0.95,
-                  letterSpacing: "-0.03em",
-                  fontVariationSettings: "'opsz' 144",
-                }}
-              >
-                {contact.displayName}
-              </h1>
-            </div>
+              {contact.displayName}
+            </h1>
           </div>
-          <div className="flex flex-col items-center gap-3">
-            <FreshnessRing result={freshness} size="lg" />
-            <div className="flex flex-col items-center gap-1">
-              <span
-                className="text-[11px] font-semibold uppercase tracking-[0.12em]"
-                style={{ color: bandColor(freshness.band) }}
-              >
-                {bandLabel(freshness.band)}
-              </span>
-              <span
-                className="text-[11px]"
-                style={{ color: "var(--ink-faint)" }}
-              >
-                {interactions365} interaction
-                {interactions365 === 1 ? "" : "s"} · last 365d
-              </span>
+          <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-4 md:mt-8 md:gap-x-8">
+            <div className="flex items-center gap-3">
+              <FreshnessRing result={freshness} size="sm" />
+              <div className="flex flex-col leading-tight">
+                <span
+                  className="text-[10.5px] font-semibold uppercase tracking-[0.14em]"
+                  style={{ color: bandColor(freshness.band) }}
+                >
+                  {bandLabel(freshness.band)}
+                </span>
+                <span
+                  className="mt-0.5 text-[11.5px] tabular-nums"
+                  style={{ color: "var(--ink-faint)" }}
+                >
+                  {interactions365} interaction
+                  {interactions365 === 1 ? "" : "s"} · 365d
+                </span>
+              </div>
             </div>
+            <StatSep />
+            {contact.category && (
+              <>
+                <HeaderStat
+                  label="Type"
+                  value={contact.category.toUpperCase()}
+                />
+                <StatSep />
+              </>
+            )}
+            <HeaderStat
+              label="Last seen"
+              value={daysSince === null ? "—" : `${daysSince}d ago`}
+              tone={daysSince !== null && daysSince >= 180 ? "cold" : undefined}
+            />
+            <StatSep />
+            <HeaderStat label="Entries" value={String(diary.length)} />
           </div>
         </section>
 
@@ -439,17 +425,46 @@ export default async function ContactDetailPage({
   );
 }
 
-function Dot() {
+function StatSep() {
   return (
     <span
+      aria-hidden
+      className="hidden sm:inline-block"
       style={{
-        width: 3,
-        height: 3,
-        borderRadius: "50%",
-        background: "var(--ink-faint)",
-        display: "inline-block",
+        width: 1,
+        height: 24,
+        background: "var(--rule)",
       }}
     />
+  );
+}
+
+function HeaderStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "cold";
+}) {
+  return (
+    <div className="flex flex-col leading-tight">
+      <span
+        className="text-[10px] font-semibold uppercase tracking-[0.14em]"
+        style={{ color: "var(--ink-faint)" }}
+      >
+        {label}
+      </span>
+      <span
+        className="mt-1 text-[14px] font-semibold tabular-nums tracking-[-0.01em]"
+        style={{
+          color: tone === "cold" ? "var(--cold-red)" : "var(--ink)",
+        }}
+      >
+        {value}
+      </span>
+    </div>
   );
 }
 
