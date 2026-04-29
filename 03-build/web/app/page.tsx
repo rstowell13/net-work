@@ -45,7 +45,7 @@ export default async function HomePage() {
                 "var(--font-serif, 'Source Serif 4'), Georgia, serif",
               fontStyle: "italic",
               fontWeight: 500,
-              fontSize: "clamp(56px, 8vw, 96px)",
+              fontSize: "clamp(40px, 11vw, 96px)",
               lineHeight: 0.92,
               letterSpacing: "-0.03em",
               fontVariationSettings: "'opsz' 144",
@@ -59,7 +59,10 @@ export default async function HomePage() {
             people.
           </h1>
 
-          <div className="mt-8 grid grid-cols-2 gap-x-8 gap-y-6 md:grid-cols-4">
+          <div
+            className="mt-6 grid grid-cols-4 gap-2 border-y py-3.5 md:mt-8 md:gap-x-8 md:gap-y-6 md:border-y-0 md:py-0"
+            style={{ borderColor: "var(--rule)" }}
+          >
             <MetaBlock
               h="Reached"
               n={home.reached}
@@ -338,15 +341,23 @@ function MetaBlock({
   of: string;
 }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-0.5 md:gap-1">
       <span
-        className="text-[10.5px] font-semibold uppercase tracking-[0.14em]"
+        className="text-[9.5px] font-semibold uppercase tracking-[0.12em] md:text-[10.5px] md:tracking-[0.14em]"
         style={{ color: "var(--ink-faint)" }}
       >
         {h}
       </span>
-      <span className="flex items-baseline gap-2">
+      <span className="flex items-baseline gap-1.5 md:gap-2">
+        {/* Mobile: condensed sans tabular numeral */}
         <span
+          className="text-[22px] font-semibold tabular-nums tracking-[-0.01em] md:hidden"
+        >
+          {n}
+        </span>
+        {/* Desktop: large italic serif numeral */}
+        <span
+          className="hidden md:inline"
           style={{
             fontFamily:
               "var(--font-serif, 'Source Serif 4'), Georgia, serif",
@@ -361,7 +372,7 @@ function MetaBlock({
           {n}
         </span>
         <span
-          className="text-[12px] tabular-nums"
+          className="text-[10.5px] tabular-nums md:text-[12px]"
           style={{ color: "var(--ink-faint)" }}
         >
           {of}
