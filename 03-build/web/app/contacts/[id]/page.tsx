@@ -11,6 +11,8 @@ import {
   RegenerateSummaryButton,
 } from "@/components/ContactActions";
 import { AddToWeekButton } from "@/components/AddToWeekButton";
+import { RefreshThreadSummaries } from "@/components/RefreshThreadSummaries";
+import { DiaryThreadOpener } from "@/components/DiaryThreadOpener";
 import { requireUser } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 import { getDiary, getRelationshipInputs } from "@/lib/diary";
@@ -325,6 +327,7 @@ export default async function ContactDetailPage({
                 : "no diary entries"
             }
           />
+          <RefreshThreadSummaries contactId={contact.id} />
           {diary.length === 0 ? (
             <p
               className="m-0 text-[13.5px]"
@@ -335,16 +338,14 @@ export default async function ContactDetailPage({
             </p>
           ) : (
             <div className="flex flex-col">
-              {diary.slice(0, 30).map((entry, i) => (
-                <article
-                  key={entry.id}
-                  className="grid gap-6 border-t py-4 first:border-t-0 first:pt-0"
-                  style={{
-                    gridTemplateColumns: "110px 1fr",
-                    borderColor: "var(--rule)",
-                  }}
-                >
-                  <DiaryTime date={entry.when} prevDate={diary[i - 1]?.when} />
+              {diary.slice(0, 30).map((entry, i) => {
+                const openerKind =
+                  entry.raw?.kind === "thread"
+                    ? ("message" as const)
+                    : entry.raw?.kind === "email"
+                    ? ("email" as const)
+                    : null;
+                const inner = (
                   <div>
                     <span
                       className="mb-1.5 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em]"
@@ -369,8 +370,34 @@ export default async function ContactDetailPage({
                       </p>
                     )}
                   </div>
-                </article>
-              ))}
+                );
+                return (
+                  <article
+                    key={entry.id}
+                    className="grid gap-6 border-t py-4 first:border-t-0 first:pt-0"
+                    style={{
+                      gridTemplateColumns: "110px 1fr",
+                      borderColor: "var(--rule)",
+                    }}
+                  >
+                    <DiaryTime
+                      date={entry.when}
+                      prevDate={diary[i - 1]?.when}
+                    />
+                    {openerKind && entry.raw ? (
+                      <DiaryThreadOpener
+                        kind={openerKind}
+                        refId={entry.raw.refId}
+                        title={entry.title}
+                      >
+                        {inner}
+                      </DiaryThreadOpener>
+                    ) : (
+                      inner
+                    )}
+                  </article>
+                );
+              })}
               {diary.length > 30 && (
                 <p
                   className="mt-4 text-[12px] tabular-nums"

@@ -133,63 +133,110 @@ export async function getDiary(contactId: string): Promise<DiaryEntry[]> {
 }
 
 export async function getRelationshipInputs(contactId: string) {
-  const [msgs, ems, cls, evts, notes] = await Promise.all([
-    db
-      .select({
-        sentAt: schema.messages.sentAt,
-        direction: schema.messages.direction,
-        body: schema.messages.body,
-      })
-      .from(schema.messages)
-      .where(eq(schema.messages.contactId, contactId))
-      .orderBy(desc(schema.messages.sentAt))
-      .limit(40),
-    db
-      .select({
-        sentAt: schema.emails.sentAt,
-        direction: schema.emails.direction,
-        subject: schema.emails.subject,
-      })
-      .from(schema.emails)
-      .where(eq(schema.emails.contactId, contactId))
-      .orderBy(desc(schema.emails.sentAt))
-      .limit(20),
-    db
-      .select({
-        startedAt: schema.callLogs.startedAt,
-        durationSeconds: schema.callLogs.durationSeconds,
-      })
-      .from(schema.callLogs)
-      .where(eq(schema.callLogs.contactId, contactId))
-      .orderBy(desc(schema.callLogs.startedAt))
-      .limit(15),
-    db
-      .select({
-        startsAt: schema.calendarEvents.startsAt,
-        title: schema.calendarEvents.title,
-      })
-      .from(schema.calendarEvents)
-      .where(eq(schema.calendarEvents.contactId, contactId))
-      .orderBy(desc(schema.calendarEvents.startsAt))
-      .limit(15),
-    db
-      .select({ body: schema.notes.body })
-      .from(schema.notes)
-      .where(eq(schema.notes.contactId, contactId))
-      .orderBy(desc(schema.notes.createdAt))
-      .limit(10),
-  ]);
+  const [msgs, ems, cls, evts, notes, msgThreads, emailThreads] =
+    await Promise.all([
+      // All messages, newest first. Limit is a safety stop — the renderer
+      // packs into a character budget, not a count.
+      db
+        .select({
+          sentAt: schema.messages.sentAt,
+          direction: schema.messages.direction,
+          body: schema.messages.body,
+          threadId: schema.messages.threadId,
+        })
+        .from(schema.messages)
+        .where(eq(schema.messages.contactId, contactId))
+        .orderBy(desc(schema.messages.sentAt))
+        .limit(2000),
+      db
+        .select({
+          sentAt: schema.emails.sentAt,
+          direction: schema.emails.direction,
+          subject: schema.emails.subject,
+          body: schema.emails.body,
+          threadId: schema.emails.threadId,
+        })
+        .from(schema.emails)
+        .where(eq(schema.emails.contactId, contactId))
+        .orderBy(desc(schema.emails.sentAt))
+        .limit(2000),
+      // TODO(post-v1): when call_transcripts ship, pull transcript text here too.
+      db
+        .select({
+          startedAt: schema.callLogs.startedAt,
+          durationSeconds: schema.callLogs.durationSeconds,
+        })
+        .from(schema.callLogs)
+        .where(eq(schema.callLogs.contactId, contactId))
+        .orderBy(desc(schema.callLogs.startedAt))
+        .limit(50),
+      db
+        .select({
+          startsAt: schema.calendarEvents.startsAt,
+          title: schema.calendarEvents.title,
+        })
+        .from(schema.calendarEvents)
+        .where(eq(schema.calendarEvents.contactId, contactId))
+        .orderBy(desc(schema.calendarEvents.startsAt))
+        .limit(50),
+      db
+        .select({ body: schema.notes.body })
+        .from(schema.notes)
+        .where(eq(schema.notes.contactId, contactId))
+        .orderBy(desc(schema.notes.createdAt))
+        .limit(20),
+      db
+        .select({
+          id: schema.messageThreads.id,
+          endedAt: schema.messageThreads.endedAt,
+          summary: schema.messageThreads.summary,
+        })
+        .from(schema.messageThreads)
+        .where(eq(schema.messageThreads.contactId, contactId))
+        .orderBy(desc(schema.messageThreads.endedAt)),
+      db
+        .select({
+          id: schema.emailThreads.id,
+          endedAt: schema.emailThreads.endedAt,
+          summary: schema.emailThreads.summary,
+        })
+        .from(schema.emailThreads)
+        .where(eq(schema.emailThreads.contactId, contactId))
+        .orderBy(desc(schema.emailThreads.endedAt)),
+    ]);
+
+  const threadHistory = [
+    ...msgThreads
+      .filter((t) => t.summary && t.summary.trim().length > 0)
+      .map((t) => ({
+        when: t.endedAt,
+        kind: "message" as const,
+        threadId: t.id,
+        summary: t.summary as string,
+      })),
+    ...emailThreads
+      .filter((t) => t.summary && t.summary.trim().length > 0)
+      .map((t) => ({
+        when: t.endedAt,
+        kind: "email" as const,
+        threadId: t.id,
+        summary: t.summary as string,
+      })),
+  ].sort((a, b) => b.when.getTime() - a.when.getTime());
 
   return {
-    recentMessages: msgs.map((m) => ({
+    rawMessages: msgs.map((m) => ({
       when: m.sentAt,
       direction: m.direction,
       body: m.body,
+      threadId: m.threadId,
     })),
-    recentEmails: ems.map((e) => ({
+    rawEmails: ems.map((e) => ({
       when: e.sentAt,
       direction: e.direction,
       subject: e.subject,
+      body: e.body,
+      threadId: e.threadId,
     })),
     recentCalls: cls.map((c) => ({
       when: c.startedAt,
@@ -200,5 +247,8 @@ export async function getRelationshipInputs(contactId: string) {
       title: e.title,
     })),
     notes: notes.map((n) => n.body),
+    threadHistory,
+    // Placeholder — populated when call transcription ships post-v1.
+    callTranscripts: [] as Array<{ when: Date; transcript: string }>,
   };
 }
