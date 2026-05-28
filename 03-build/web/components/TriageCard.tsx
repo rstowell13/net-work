@@ -121,11 +121,68 @@ export function TriageCard({
       </div>
 
       <article
-        className="mb-6 rounded-2xl border bg-[var(--stone-raised)] px-10 pb-8 pt-10"
+        className="mb-6 rounded-2xl border bg-[var(--stone-raised)] px-5 pb-7 pt-7 md:px-10 md:pb-8 md:pt-10"
         style={{ borderColor: "var(--rule)" }}
       >
+        {/* Mobile header: avatar + ring on row 1, name + meta on row 2 */}
+        <header className="mb-6 md:hidden">
+          <div className="flex items-center justify-between gap-4">
+            <Avatar
+              id={contact.id}
+              name={contact.displayName}
+              photoUrl={contact.photoUrl}
+              size="lg"
+            />
+            <div className="flex flex-col items-center gap-1.5">
+              <FreshnessRing result={freshness} size="md" />
+              <span
+                className="text-[10px] font-semibold uppercase tracking-[0.1em]"
+                style={{ color: bandColor(freshness.band) }}
+              >
+                {bandLabel(freshness.band)}
+              </span>
+            </div>
+          </div>
+          <h1
+            className="m-0 mt-4 break-words"
+            style={{
+              fontFamily:
+                "var(--font-serif, 'Source Serif 4'), Georgia, serif",
+              fontStyle: "italic",
+              fontWeight: 500,
+              fontSize: "clamp(30px, 8.5vw, 44px)",
+              lineHeight: 0.98,
+              letterSpacing: "-0.022em",
+              fontVariationSettings: "'opsz' 96",
+            }}
+          >
+            {contact.displayName}
+          </h1>
+          <div
+            className="mt-2 text-[12px] tabular-nums"
+            style={{ color: "var(--ink-faint)" }}
+          >
+            {metaLine}
+          </div>
+          <div className="mt-2.5 flex flex-wrap gap-1">
+            {sources.map((s) => (
+              <span
+                key={s}
+                className="rounded px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.04em]"
+                style={{
+                  background: "var(--stone-sunken)",
+                  color: "var(--ink-muted)",
+                }}
+              >
+                {s.replace(/_/g, " ")}
+              </span>
+            ))}
+          </div>
+        </header>
+
+        {/* Desktop header — original 3-column layout */}
         <header
-          className="mb-7 grid items-start gap-6"
+          className="mb-7 hidden items-start gap-6 md:grid"
           style={{ gridTemplateColumns: "96px 1fr auto" }}
         >
           <Avatar
@@ -183,7 +240,7 @@ export function TriageCard({
         </header>
 
         <div
-          className="mb-6 grid grid-cols-4 border-y py-4"
+          className="mb-6 grid grid-cols-2 gap-y-4 border-y py-4 md:grid-cols-4 md:gap-y-0"
           style={{ borderColor: "var(--rule)" }}
         >
           <SignalCell label="Sources" value={signals.sources} />

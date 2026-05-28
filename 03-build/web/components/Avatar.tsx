@@ -1,3 +1,5 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
 import { avatarColorVar, initials } from "@/lib/avatar-color";
 
 const SIZES = {
@@ -18,6 +20,24 @@ export function Avatar({
   photoUrl?: string | null;
   size?: keyof typeof SIZES;
 }) {
+  const [failed, setFailed] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+  // The browser may load and fail the SSR-rendered <img> before React
+  // hydrates and attaches onError, so check on mount.
+  useEffect(() => {
+    const el = imgRef.current;
+    if (el && el.complete && el.naturalWidth === 0) setFailed(true);
+  }, []);
+
+  const trimmedUrl = photoUrl?.trim();
+  // Google Contacts often sends a "default" placeholder photo (colored
+  // circle with white first initial) for contacts without real photos.
+  // Those URLs live under the `/a/` path; real photos are under
+  // `/contacts/`. Treat the default as missing so we render our monogram.
+  const isGoogleDefault =
+    !!trimmedUrl &&
+    /lh\d+\.googleusercontent\.com\/a\//.test(trimmedUrl);
+  const useImg = !!trimmedUrl && !isGoogleDefault && !failed;
   const s = SIZES[size];
   const style: React.CSSProperties = {
     width: s.w,
@@ -36,15 +56,22 @@ export function Avatar({
     overflow: "hidden",
     flexShrink: 0,
   };
-  if (photoUrl) {
+  if (useImg) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={photoUrl}
-        alt={name ?? "contact"}
+        ref={imgRef}
+        src={trimmedUrl}
+        alt=""
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
         style={{ ...style, objectFit: "cover" }}
       />
     );
   }
-  return <div style={style}>{initials(name)}</div>;
+  return (
+    <div style={style} aria-label={name ?? "contact"}>
+      {initials(name)}
+    </div>
+  );
 }

@@ -164,12 +164,54 @@ export function SuggestionsFlow({ candidates, cadence }: Props) {
       </div>
 
       <article
-        className="rounded-2xl border bg-[var(--stone-raised)] p-9"
+        className="rounded-2xl border bg-[var(--stone-raised)] p-5 md:p-9"
         style={{ borderColor: "var(--rule)" }}
       >
+        {/* Mobile header */}
+        <header className="mb-6 md:hidden">
+          <div className="flex items-center justify-between gap-4">
+            <Avatar
+              id={cur.contactId}
+              name={cur.displayName}
+              photoUrl={cur.photoUrl}
+              size="lg"
+            />
+            <div className="flex flex-col items-center gap-1.5">
+              <FreshnessRing result={freshness} size="md" />
+              <span
+                className="text-[10px] font-semibold uppercase tracking-[0.1em]"
+                style={{ color: bandColor(freshness.band) }}
+              >
+                {bandLabel(freshness.band)}
+              </span>
+            </div>
+          </div>
+          <h1
+            className="m-0 mt-4 break-words"
+            style={{
+              fontFamily:
+                "var(--font-serif, 'Source Serif 4'), Georgia, serif",
+              fontStyle: "italic",
+              fontWeight: 500,
+              fontSize: "clamp(28px, 8vw, 40px)",
+              lineHeight: 0.98,
+              letterSpacing: "-0.022em",
+            }}
+          >
+            {cur.displayName}
+          </h1>
+          <p
+            className="m-0 mt-2 text-[12.5px]"
+            style={{ color: "var(--ink-faint)" }}
+          >
+            {cur.category && <span>{cur.category} · </span>}
+            {cur.reason}
+          </p>
+        </header>
+
+        {/* Desktop header — original layout */}
         <header
-          className="mb-7 grid items-start gap-6"
-          style={{ gridTemplateColumns: "96px 1fr auto" }}
+          className="mb-7 hidden grid-cols-[96px_1fr_auto] items-start gap-6 md:grid"
         >
           <Avatar
             id={cur.contactId}
@@ -211,10 +253,13 @@ export function SuggestionsFlow({ candidates, cadence }: Props) {
           </div>
         </header>
 
-        <div className="grid grid-cols-3 gap-3 border-t pt-6" style={{ borderColor: "var(--rule)" }}>
+        <div
+          className="grid grid-cols-3 gap-2 border-t pt-5 md:gap-3 md:pt-6"
+          style={{ borderColor: "var(--rule)" }}
+        >
           <button
             onClick={() => decide("never")}
-            className="rounded-lg border bg-transparent px-4 py-4 text-[14px] font-medium hover:border-[var(--cold-red)] hover:text-[var(--cold-red)]"
+            className="rounded-lg border bg-transparent px-2 py-3 text-[12.5px] font-medium hover:border-[var(--cold-red)] hover:text-[var(--cold-red)] md:px-4 md:py-4 md:text-[14px]"
             style={{
               borderColor: "var(--rule)",
               color: "var(--ink-muted)",
@@ -224,7 +269,7 @@ export function SuggestionsFlow({ candidates, cadence }: Props) {
           </button>
           <button
             onClick={() => decide("skip")}
-            className="rounded-lg border bg-transparent px-4 py-4 text-[14px] font-medium"
+            className="rounded-lg border bg-transparent px-2 py-3 text-[12.5px] font-medium md:px-4 md:py-4 md:text-[14px]"
             style={{
               borderColor: "var(--rule)",
               color: "var(--ink-muted)",
@@ -234,7 +279,7 @@ export function SuggestionsFlow({ candidates, cadence }: Props) {
           </button>
           <button
             onClick={() => decide("pick")}
-            className="rounded-lg border-0 px-4 py-4 text-[14px] font-semibold"
+            className="rounded-lg border-0 px-2 py-3 text-[12.5px] font-semibold md:px-4 md:py-4 md:text-[14px]"
             style={{ background: "var(--ink)", color: "var(--stone)" }}
           >
             Reach out →

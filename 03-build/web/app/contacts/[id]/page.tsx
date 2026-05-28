@@ -132,8 +132,9 @@ export default async function ContactDetailPage({
           <span>{contact.displayName}</span>
         </nav>
 
+        {/* Desktop header — original layout, untouched */}
         <section
-          className="flex flex-col gap-6 border-b pb-9 md:grid md:items-end md:gap-14"
+          className="hidden border-b pb-9 md:grid md:items-end md:gap-14"
           style={{
             gridTemplateColumns: "minmax(0, 1.5fr) auto",
             borderColor: "var(--rule)",
@@ -168,7 +169,7 @@ export default async function ContactDetailPage({
                 {diary.length} entr{diary.length === 1 ? "y" : "ies"}
               </span>
             </div>
-            <div className="flex items-center gap-4 md:gap-6">
+            <div className="flex items-center gap-6">
               <Avatar
                 id={contact.id}
                 name={contact.displayName}
@@ -209,6 +210,80 @@ export default async function ContactDetailPage({
                 {interactions365 === 1 ? "" : "s"} · last 365d
               </span>
             </div>
+          </div>
+        </section>
+
+        {/* Mobile header — avatar + name + large ring */}
+        <section
+          className="border-b pb-7 md:hidden"
+          style={{ borderColor: "var(--rule)" }}
+        >
+          <div
+            className="flex flex-wrap items-center gap-2.5 text-[12px] tabular-nums"
+            style={{ color: "var(--ink-faint)" }}
+          >
+            {contact.category && (
+              <>
+                <span
+                  className="rounded px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.04em]"
+                  style={{
+                    background: "var(--ink)",
+                    color: "var(--stone)",
+                  }}
+                >
+                  {contact.category}
+                </span>
+                <Dot />
+              </>
+            )}
+            {daysSince !== null && (
+              <>
+                <span>last seen {daysSince}d ago</span>
+                <Dot />
+              </>
+            )}
+            <span>
+              {diary.length} entr{diary.length === 1 ? "y" : "ies"}
+            </span>
+          </div>
+          <div className="mt-5 flex items-center gap-4">
+            <Avatar
+              id={contact.id}
+              name={contact.displayName}
+              photoUrl={contact.photoUrl}
+              size="lg"
+            />
+            <h1
+              className="m-0 min-w-0 flex-1 break-words"
+              style={{
+                fontFamily:
+                  "var(--font-serif, 'Source Serif 4'), Georgia, serif",
+                fontStyle: "italic",
+                fontWeight: 500,
+                fontSize: "clamp(32px, 9vw, 56px)",
+                lineHeight: 0.95,
+                letterSpacing: "-0.03em",
+                fontVariationSettings: "'opsz' 144",
+              }}
+            >
+              {contact.displayName}
+            </h1>
+          </div>
+          <div className="mt-6 flex flex-col items-center gap-2">
+            <FreshnessRing result={freshness} size="lg" />
+            <span
+              className="text-[11px] font-semibold uppercase tracking-[0.12em]"
+              style={{ color: bandColor(freshness.band) }}
+            >
+              {bandLabel(freshness.band)}
+            </span>
+            <span
+              className="text-[11px]"
+              style={{ color: "var(--ink-faint)" }}
+            >
+              {interactions365} interaction
+              {interactions365 === 1 ? "" : "s"} · last 365d
+            </span>
           </div>
         </section>
 
