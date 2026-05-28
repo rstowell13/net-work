@@ -323,6 +323,7 @@ Before code can begin. I'll guide him through each on day 1.
 ## Post-v1 backlog (NOT in scope)
 
 Listed so they don't accidentally creep in:
+- Bulk "Summarize all threads" action on the contacts list — runs `refreshContactThreadSummaries` for selected contacts. Deferred until contact triage is done so we only spend API on contacts we're keeping.
 - iOS app
 - In-app call recording / transcription (Granola-style)
 - Auto-detection of "reached out" / "connected" from synced outbound messages

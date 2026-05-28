@@ -55,7 +55,14 @@ def read_messages_since(
             "Has Full Disk Access been granted to this Python interpreter?"
         )
 
-    counters = {"scanned": 0, "text_only": 0, "attributed_only": 0, "skipped_no_body": 0, "no_handle": 0}
+    counters = {
+        "scanned": 0,
+        "text_only": 0,
+        "attributed_only": 0,
+        "skipped_no_body": 0,
+        "no_handle": 0,
+        "recovered_handle": 0,
+    }
 
     # Read-only connection. URI mode lets us specify mode=ro.
     uri = f"file:{path}?mode=ro"
@@ -66,19 +73,37 @@ def read_messages_since(
         # NOTE: no `text IS NOT NULL` filter. On modern macOS most iMessages
         # carry their body in `attributedBody` (a typedstream blob) and have
         # NULL `text`. We decode `attributedBody` in Python below.
+        #
+        # Older SMS outbound rows have `message.handle_id` = NULL — the
+        # recipient is stored in `chat_handle_join` instead. The
+        # `recovered_handle` subquery recovers it for 1:1 chats (chats with
+        # exactly one participant handle). Group chats stay unhandled and
+        # are skipped further down, same as before.
         cur.execute(
             """
             SELECT
-              m.ROWID            as rowid,
-              m.guid             as guid,
-              m.text             as body,
-              m.attributedBody   as attributed_body,
-              m.date             as apple_ns,
-              m.is_from_me       as is_from_me,
-              m.service          as service,
-              h.id               as handle
+              m.ROWID                                          as rowid,
+              m.guid                                           as guid,
+              m.text                                           as body,
+              m.attributedBody                                 as attributed_body,
+              m.date                                           as apple_ns,
+              m.is_from_me                                     as is_from_me,
+              m.service                                        as service,
+              h.id                                             as handle_direct,
+              recovered.handle                                 as handle_recovered
             FROM message m
             LEFT JOIN handle h ON h.ROWID = m.handle_id
+            LEFT JOIN (
+              SELECT
+                cmj.message_id AS message_id,
+                MIN(h2.id)     AS handle,
+                COUNT(DISTINCT chj.handle_id) AS n_participants
+              FROM chat_message_join cmj
+              JOIN chat_handle_join chj ON chj.chat_id = cmj.chat_id
+              JOIN handle h2           ON h2.ROWID    = chj.handle_id
+              GROUP BY cmj.message_id
+              HAVING n_participants = 1
+            ) recovered ON recovered.message_id = m.ROWID
             WHERE m.ROWID > ?
             ORDER BY m.ROWID ASC
             """,
@@ -101,7 +126,15 @@ def read_messages_since(
                     counters["skipped_no_body"] += 1
                     continue
 
-            handle = r["handle"] or ""
+            handle = r["handle_direct"] or ""
+            if not handle:
+                # Outbound SMS rows commonly have message.handle_id = NULL;
+                # the recipient lives in chat_handle_join. Use the recovered
+                # handle for 1:1 chats. Group chats still won't have one and
+                # get skipped below (we don't support group chats yet).
+                handle = r["handle_recovered"] or ""
+                if handle:
+                    counters["recovered_handle"] += 1
             if not handle:
                 # Group-chat messages (no 1:1 handle) — skip for now; the
                 # current schema keys threads on handle, so these would

@@ -469,6 +469,7 @@ export const messageThreads = pgTable(
     summaryGeneratedAt: timestamp("summary_generated_at", {
       withTimezone: true,
     }),
+    summaryMessageCount: integer("summary_message_count"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -532,6 +533,7 @@ export const emailThreads = pgTable(
     summaryGeneratedAt: timestamp("summary_generated_at", {
       withTimezone: true,
     }),
+    summaryMessageCount: integer("summary_message_count"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

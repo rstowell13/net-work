@@ -5,27 +5,72 @@ import { db, schema } from "@/lib/db";
 import { chat, LLMConfigError } from "./client";
 
 const SYSTEM_PROMPT_RELATIONSHIP = [
-  "You are summarizing a relationship for the person who maintains the contact.",
-  "Voice: factual, warm, second-person ('you'). Don't editorialize, don't speculate, don't moralize.",
-  "Length: one short paragraph (3–5 sentences). No bullets, no headers.",
-  "If the data is sparse, say so plainly in one sentence rather than padding.",
+  "TASK: Write 150–300 characters about this specific person — who they are to the user, what shared context the two of you have, and what the relationship has been about. Output the text only; no preface, no greeting, no headers.",
+  "VOICE: A thoughtful mutual friend describing this person to someone who already knows them. Specific, observational, slightly dry. Mix of personal-texture and fact-forward dossier. Never categorical.",
+  "MAXIMUM SPECIFICITY: Use names and details that appear in the data — kid names, business names, jobs, cities, schools, sports teams, shared trips, specific recurring threads, concrete decisions. Generic categories ('personal contact', 'friend', 'professional contact') are the enemy. If the data names a kid, name the kid. If the data shows a business venture, name the business. If you only know vague themes, lean toward fewer concrete details rather than padding with generic filler.",
+  "STRUCTURE (preferred but flexible): Sentence 1 leads with a distinctive identifier — how the user actually knows this person, or the most defining feature of the relationship (e.g. 'Your old mission companion from Cebu' / 'Brig from your Sigma Chi pledge class' / 'Brian — fantasy football co-commissioner and your fastest sports back-channel'). Sentence 2 (optional) adds current-state texture or a recent thread (e.g. 'Lately the conversation has been about Denim's flag football team and Indian Wells trip planning.').",
+  "BANNED OPENERS (do not start with any of these, ever):",
+  "  • 'A personal contact ___'",
+  "  • 'A friend and ___ texter / texting partner'",
+  "  • 'An occasional texter ___'",
+  "  • 'A frequent texting partner ___'",
+  "  • 'A close friend with whom you ___'",
+  "  • 'You have a ___ relationship with ___'",
+  "BANNED PHRASES (do not include anywhere): 'discussing', 'discussed', 'exchanging', 'topics like', 'topics include', 'in a ___ manner', 'in a ___ way', 'with a ___ tone', 'suggests', 'indicating', 'reflecting', 'with a focus on', 'back-and-forth', 'warm and ___ touch', 'warm and ___ connection', 'frequent communication', 'occasional touch', 'familiar tone'.",
+  "RULES OF SUBSTITUTION when tempted to use a banned word: 'discussing X, Y, Z' → '— X, Y, Z' or ': X, Y, Z'; 'with a focus on family' → 'mostly family stuff'; 'in a casual manner' → 'casual'; 'warm and frequent connection' → just delete it and add a specific detail instead.",
+  "INPUT FORMAT: Recent conversation appears in full; older history appears as one-line topic tags per thread. Both are equally valid signal. For a long-dormant relationship, the older topic tags ARE the substance — use them to characterize what the relationship used to be about and lead with what was distinctive.",
+  "FALLBACK: If the data is genuinely sparse (one or two messages with no substance), output exactly: 'Not enough interaction yet to characterize this relationship.' and stop. Do NOT pad with generic filler.",
+  "GOOD examples — note: each leads with a distinctive identifier, names specifics, no categorical opener:",
+  "  • 'Your mission companion from Cebu. Works in nuclear power now — last real thread was a possible joint business venture in renewables you discussed but never moved on. Stays in light touch around family and mission reunions.'",
+  "  • 'Brian — fantasy football co-commissioner and your fastest sports back-channel. Lately the conversation has been Denim's flag football coach, the baseball playoffs forcing the Indian Wells trip earlier, and Marcus Smart trade rumors.'",
+  "  • 'College roommate. Real estate in Austin, two daughters in middle school. Quarterly check-ins, mostly travel logistics and kids — last substantive thread was a Park City trip you discussed but didn't book.'",
+  "  • 'Brig — old Sigma Chi brother. Career-coaching back-channel: kids, side hustles, the e-commerce gig he was thinking about taking when he was still at Nuvi. Has gone dormant.'",
+  "BAD examples — DO NOT MIRROR THESE; they are exactly the failure mode:",
+  "  • 'A personal contact and occasional texter: breakfast spots, travel, and family updates.' ← banned opener + generic category + topic-tag list",
+  "  • 'A close friend and frequent texting partner — careers, kids, and business ventures.' ← banned opener + no specifics",
+  "  • 'A friend from your Cebu mission days, with a warm and occasional touch, discussing nuclear power ventures.' ← banned phrases 'warm and ___ touch' and 'discussing'",
 ].join(" ");
 
 const SYSTEM_PROMPT_THREAD = [
-  "Summarize this thread of messages between the user and the contact in 2–3 sentences.",
-  "Voice: factual, second-person, no editorializing.",
-  "Capture: what was discussed, any open questions, who spoke last.",
+  "List the topics and key details from this thread as a comma-separated phrase (under 45 words).",
+  "Do NOT narrate. Do NOT use pronouns. Do NOT say who said what. Do NOT use full sentences.",
+  "Do NOT include any dates, days of the week, times, or relative time references — the diary already shows when.",
+  "Just subject matter and concrete specifics (names, places, prices, decisions) — like an expanded tag list.",
+  "Examples: 'Indian Wells trip planning, Grand Hyatt Champions Suite, $40k rate, baseball playoffs forced trip up, free buffet and resort credit'",
+  "         'lunch logistics at Sweetgreen, rescheduled meetup, parking validation'",
+  "         'Marcus Smart trade rumor, Celtics reaction, polymarket odds, NBA playoffs commentary'",
 ].join(" ");
 
 export interface RelationshipInputs {
   contactName: string;
   category: string | null;
   notes: string[];
-  recentMessages: Array<{ when: Date; direction: string; body: string | null }>;
-  recentEmails: Array<{ when: Date; direction: string; subject: string | null }>;
+  rawMessages: Array<{
+    when: Date;
+    direction: string;
+    body: string | null;
+    threadId: string | null;
+  }>;
+  rawEmails: Array<{
+    when: Date;
+    direction: string;
+    subject: string | null;
+    body: string | null;
+    threadId: string | null;
+  }>;
   recentCalls: Array<{ when: Date; durationSeconds: number }>;
   recentEvents: Array<{ when: Date; title: string | null }>;
+  threadHistory: Array<{
+    when: Date;
+    kind: "message" | "email";
+    threadId: string;
+    summary: string;
+  }>;
+  callTranscripts: Array<{ when: Date; transcript: string }>;
 }
+
+const RAW_BODY_BUDGET = 60000;
+const MAX_ITEM_BODY = 12000;
 
 function hashInputs(inputs: RelationshipInputs): string {
   return createHash("sha1")
@@ -34,55 +79,160 @@ function hashInputs(inputs: RelationshipInputs): string {
     .slice(0, 16);
 }
 
+type RawItem =
+  | {
+      kind: "msg";
+      when: Date;
+      direction: string;
+      body: string | null;
+      threadId: string | null;
+    }
+  | {
+      kind: "email";
+      when: Date;
+      direction: string;
+      subject: string | null;
+      body: string | null;
+      threadId: string | null;
+    };
+
+function fmtDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
 function renderRelationshipUserMsg(i: RelationshipInputs): string {
   const lines: string[] = [];
   lines.push(`Contact: ${i.contactName}${i.category ? ` (${i.category})` : ""}`);
   if (i.notes.length > 0) {
     lines.push("\nNotes you've written:");
-    i.notes.slice(0, 5).forEach((n) => lines.push(`- ${n}`));
+    i.notes.slice(0, 10).forEach((n) => lines.push(`- ${n}`));
   }
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  if (i.recentMessages.length > 0) {
-    lines.push("\nRecent messages:");
-    i.recentMessages.slice(0, 12).forEach((m) =>
-      lines.push(
-        `- ${fmt(m.when)} (${m.direction}) ${
-          (m.body ?? "").slice(0, 200) || "(empty)"
-        }`,
-      ),
+
+  // Interleave messages + emails newest-first and pack into the raw-body
+  // budget. Track which threadIds get consumed so we don't double-cover them
+  // in the older-history block below.
+  const interleaved: RawItem[] = [
+    ...i.rawMessages.map<RawItem>((m) => ({
+      kind: "msg",
+      when: m.when,
+      direction: m.direction,
+      body: m.body,
+      threadId: m.threadId,
+    })),
+    ...i.rawEmails.map<RawItem>((e) => ({
+      kind: "email",
+      when: e.when,
+      direction: e.direction,
+      subject: e.subject,
+      body: e.body,
+      threadId: e.threadId,
+    })),
+  ].sort((a, b) => b.when.getTime() - a.when.getTime());
+
+  const consumedThreads = new Set<string>();
+  const recentMsgLines: string[] = [];
+  const recentEmailLines: string[] = [];
+  let usedChars = 0;
+  let earliestRawAt: Date | null = null;
+  let latestRawAt: Date | null = null;
+
+  for (const item of interleaved) {
+    if (usedChars >= RAW_BODY_BUDGET) break;
+    const body = (item.kind === "email"
+      ? item.body ?? item.subject ?? ""
+      : item.body ?? ""
+    )
+      .toString()
+      .slice(0, MAX_ITEM_BODY)
+      .trim();
+    if (!body) continue;
+    let line: string;
+    if (item.kind === "msg") {
+      line = `- ${fmtDate(item.when)} (${item.direction}) ${body}`;
+      recentMsgLines.push(line);
+    } else {
+      const subj = item.subject?.trim() || "(no subject)";
+      line = `- ${fmtDate(item.when)} (${item.direction}) [${subj}]\n${body}`;
+      recentEmailLines.push(line);
+    }
+    usedChars += line.length + 1;
+    if (item.threadId) consumedThreads.add(item.threadId);
+    if (!latestRawAt || item.when > latestRawAt) latestRawAt = item.when;
+    if (!earliestRawAt || item.when < earliestRawAt) earliestRawAt = item.when;
+  }
+
+  if (recentMsgLines.length > 0) {
+    lines.push(
+      `\nRecent messages (full text, ${recentMsgLines.length} shown):`,
     );
+    lines.push(...recentMsgLines);
   }
-  if (i.recentEmails.length > 0) {
-    lines.push("\nRecent emails:");
-    i.recentEmails.slice(0, 8).forEach((e) =>
-      lines.push(
-        `- ${fmt(e.when)} (${e.direction}) ${e.subject ?? "(no subject)"}`,
-      ),
+  if (recentEmailLines.length > 0) {
+    lines.push(
+      `\nRecent emails (full text, ${recentEmailLines.length} shown):`,
     );
+    lines.push(...recentEmailLines);
   }
+
   if (i.recentCalls.length > 0) {
-    lines.push("\nRecent calls:");
-    i.recentCalls.slice(0, 6).forEach((c) =>
-      lines.push(
-        `- ${fmt(c.when)} (${Math.round(c.durationSeconds / 60)}m)`,
-      ),
+    lines.push("\nRecent calls (duration only — transcripts coming later):");
+    i.recentCalls
+      .slice(0, 12)
+      .forEach((c) =>
+        lines.push(
+          `- ${fmtDate(c.when)} (${Math.round(c.durationSeconds / 60)}m)`,
+        ),
+      );
+  }
+
+  // Older topic history: thread summaries for threads not already covered
+  // above. This is where deep-but-dormant relationships preserve their texture.
+  const olderHistory = i.threadHistory.filter(
+    (t) => !consumedThreads.has(t.threadId),
+  );
+  if (olderHistory.length > 0) {
+    lines.push(
+      `\nOlder topic history (${olderHistory.length} threads, summaries only):`,
+    );
+    olderHistory.forEach((t) =>
+      lines.push(`- ${fmtDate(t.when)} [${t.kind}] ${t.summary}`),
     );
   }
+
   if (i.recentEvents.length > 0) {
-    lines.push("\nRecent calendar events together:");
+    lines.push("\nCalendar events together:");
     i.recentEvents
-      .slice(0, 6)
-      .forEach((e) => lines.push(`- ${fmt(e.when)} ${e.title ?? "(no title)"}`));
+      .slice(0, 12)
+      .forEach((e) =>
+        lines.push(`- ${fmtDate(e.when)} ${e.title ?? "(no title)"}`),
+      );
   }
+
+  // Future hook — populated when call transcription ships.
+  if (i.callTranscripts.length > 0) {
+    lines.push("\nCall transcripts:");
+    i.callTranscripts.forEach((t) =>
+      lines.push(`- ${fmtDate(t.when)}\n${t.transcript.slice(0, MAX_ITEM_BODY)}`),
+    );
+  }
+
   if (
-    i.recentMessages.length +
-      i.recentEmails.length +
+    recentMsgLines.length +
+      recentEmailLines.length +
       i.recentCalls.length +
+      olderHistory.length +
       i.recentEvents.length ===
     0
   ) {
     lines.push("\n(No diary data linked to this contact yet.)");
+  } else if (earliestRawAt && latestRawAt) {
+    lines.push(
+      `\n(Recent block spans ${fmtDate(earliestRawAt)} → ${fmtDate(
+        latestRawAt,
+      )}.)`,
+    );
   }
+
   return lines.join("\n");
 }
 
@@ -127,7 +277,7 @@ export async function getOrGenerateRelationshipSummary(
         { role: "system", content: SYSTEM_PROMPT_RELATIONSHIP },
         { role: "user", content: renderRelationshipUserMsg(inputs) },
       ],
-      { temperature: 0.4, maxTokens: 500 },
+      { temperature: 0.4, maxTokens: 160 },
     );
   } catch (e) {
     if (e instanceof LLMConfigError) return null;
@@ -160,7 +310,7 @@ export async function summarizeThread(
         { role: "system", content: SYSTEM_PROMPT_THREAD },
         { role: "user", content: inputs.transcript.slice(0, 6000) },
       ],
-      { temperature: 0.3, maxTokens: 200 },
+      { temperature: 0.3, maxTokens: 180 },
     );
     return r.text;
   } catch (e) {
