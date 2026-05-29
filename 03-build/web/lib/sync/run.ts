@@ -9,6 +9,7 @@
 import { db } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { importRuns, sources } from "@/db/schema";
+import { classifyFailureStatus } from "./auth-error";
 
 export type ImportCounters = {
   recordsSeen: number;
@@ -75,9 +76,15 @@ export async function runImport(args: {
         errorMessage,
       })
       .where(eq(importRuns.id, run.id));
+    // An expired/revoked OAuth token must surface as needs_reauth (so the
+    // Sources UI offers a Reconnect button), not a generic error (which only
+    // offers "Sync now" — useless when the login itself is dead).
     await db
       .update(sources)
-      .set({ lastSyncError: errorMessage, status: "error" })
+      .set({
+        lastSyncError: errorMessage,
+        status: classifyFailureStatus(errorMessage),
+      })
       .where(eq(sources.id, args.sourceId));
     return {
       ...counters,
