@@ -67,12 +67,15 @@ export async function GET(request: Request) {
   const tokenInfo: any = await oauth2.getTokenInfo(accessToken);
   const googleEmail = (tokenInfo?.email ?? null) as string | null;
 
-  // Create Source + OAuthToken rows for each kind
+  // Create Source + OAuthToken rows for each kind, keyed by the connected
+  // account email so multiple Google accounts coexist (a new account creates
+  // new rows; reconnecting an account updates its existing rows).
   for (const kind of GOOGLE_KINDS) {
     const source = await upsertSource({
       userId: user.id,
       kind,
       status: "connected",
+      accountEmail: googleEmail ?? "",
       config: googleEmail ? { google_email: googleEmail } : undefined,
     });
     await setOAuthToken({

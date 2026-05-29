@@ -187,6 +187,10 @@ export const sources = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     kind: sourceKindEnum("kind").notNull(),
+    // Which external account this source is for (e.g. the Google account email).
+    // "" for single-account sources (mac_agent, linkedin_csv). Lets a user
+    // connect multiple Google accounts — one source row per (kind, account).
+    accountEmail: text("account_email").notNull().default(""),
     status: sourceStatusEnum("status").notNull().default("not_connected"),
     lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
     lastSyncError: text("last_sync_error"),
@@ -199,7 +203,11 @@ export const sources = pgTable(
       .defaultNow(),
   },
   (t) => ({
-    uniqUserKind: uniqueIndex("sources_user_kind_uniq").on(t.userId, t.kind),
+    uniqUserKindAccount: uniqueIndex("sources_user_kind_account_uniq").on(
+      t.userId,
+      t.kind,
+      t.accountEmail,
+    ),
   }),
 );
 

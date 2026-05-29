@@ -26,6 +26,7 @@ export type SourceStatus =
 export type SourceRow = {
   id: string;
   kind: SourceKind;
+  accountEmail: string;
   status: SourceStatus;
   lastSyncAt: Date | null;
   lastSyncError: string | null;
@@ -37,6 +38,7 @@ export async function getAllSourcesForUser(userId: string): Promise<SourceRow[]>
     .select({
       id: sources.id,
       kind: sources.kind,
+      accountEmail: sources.accountEmail,
       status: sources.status,
       lastSyncAt: sources.lastSyncAt,
       lastSyncError: sources.lastSyncError,
@@ -48,18 +50,28 @@ export async function getAllSourcesForUser(userId: string): Promise<SourceRow[]>
 }
 
 /**
- * Upsert a Source row by (userId, kind). Returns the row.
+ * Upsert a Source row by (userId, kind, accountEmail). `accountEmail` is "" for
+ * single-account sources (mac_agent, linkedin_csv) and the Google account email
+ * otherwise — so a user can connect multiple Google accounts side by side.
  */
 export async function upsertSource(args: {
   userId: string;
   kind: SourceKind;
   status: SourceStatus;
+  accountEmail?: string;
   config?: Record<string, unknown>;
 }): Promise<{ id: string }> {
+  const accountEmail = (args.accountEmail ?? "").toLowerCase();
   const existing = await db
     .select({ id: sources.id })
     .from(sources)
-    .where(and(eq(sources.userId, args.userId), eq(sources.kind, args.kind)))
+    .where(
+      and(
+        eq(sources.userId, args.userId),
+        eq(sources.kind, args.kind),
+        eq(sources.accountEmail, accountEmail),
+      ),
+    )
     .limit(1);
   if (existing[0]) {
     await db
@@ -77,6 +89,7 @@ export async function upsertSource(args: {
     .values({
       userId: args.userId,
       kind: args.kind,
+      accountEmail,
       status: args.status,
       config: args.config ?? null,
     })
