@@ -13,6 +13,9 @@ const PUBLIC_PATHS = [
   // route handler), not a Supabase session. Bypass the redirect-to-/login
   // so POSTs from the agent reach the handler.
   "/api/ingest",
+  // Vercel Cron calls this with a CRON_SECRET bearer (checked in the route),
+  // not a session.
+  "/api/cron",
 ];
 
 export async function proxy(request: NextRequest) {
