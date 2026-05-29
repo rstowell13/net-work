@@ -112,6 +112,24 @@ export default async function ContactDetailPage({
 
   const openFollowUps = followUps.filter((f) => f.status === "open");
 
+  // Single source of truth: the distinct union of every email / phone / LinkedIn
+  // across all of this contact's source records (Apple, Google, Gmail, etc.).
+  const allEmails = [
+    ...new Set(
+      rawMembers.flatMap((r) => (r.emails ?? []).map((e) => e.toLowerCase())),
+    ),
+  ];
+  const allPhones = [
+    ...new Set(rawMembers.flatMap((r) => r.phones ?? [])),
+  ];
+  const allLinkedIn = [
+    ...new Set(
+      rawMembers
+        .map((r) => r.linkedinUrl)
+        .filter((u): u is string => !!u),
+    ),
+  ];
+
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
   const daysSince = lastSeen
@@ -309,6 +327,79 @@ export default async function ContactDetailPage({
             )}
           </div>
         </div>
+
+        {(allEmails.length > 0 ||
+          allPhones.length > 0 ||
+          allLinkedIn.length > 0) && (
+          <section
+            className="border-b py-8"
+            style={{ borderColor: "var(--rule)" }}
+          >
+            <BlockHeader
+              title="Contact info"
+              right={`${allEmails.length} email${
+                allEmails.length === 1 ? "" : "s"
+              } · ${allPhones.length} phone${
+                allPhones.length === 1 ? "" : "s"
+              }`}
+            />
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              <MetaBlock title="Emails">
+                {allEmails.length === 0 ? (
+                  <span style={{ color: "var(--ink-faint)" }}>—</span>
+                ) : (
+                  allEmails.map((e) => (
+                    <div key={e}>
+                      <a
+                        href={`mailto:${e}`}
+                        className="hover:underline"
+                        style={{ color: "var(--ink)" }}
+                      >
+                        {e}
+                      </a>
+                    </div>
+                  ))
+                )}
+              </MetaBlock>
+              <MetaBlock title="Phones">
+                {allPhones.length === 0 ? (
+                  <span style={{ color: "var(--ink-faint)" }}>—</span>
+                ) : (
+                  allPhones.map((p) => (
+                    <div key={p}>
+                      <a
+                        href={`tel:${p}`}
+                        className="hover:underline"
+                        style={{ color: "var(--ink)" }}
+                      >
+                        {p}
+                      </a>
+                    </div>
+                  ))
+                )}
+              </MetaBlock>
+              <MetaBlock title="LinkedIn">
+                {allLinkedIn.length === 0 ? (
+                  <span style={{ color: "var(--ink-faint)" }}>—</span>
+                ) : (
+                  allLinkedIn.map((u) => (
+                    <div key={u}>
+                      <a
+                        href={u}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="hover:underline"
+                        style={{ color: "var(--ink)" }}
+                      >
+                        {u.replace(/^https?:\/\/(www\.)?/, "")}
+                      </a>
+                    </div>
+                  ))
+                )}
+              </MetaBlock>
+            </div>
+          </section>
+        )}
 
         <section
           className="border-b py-8"

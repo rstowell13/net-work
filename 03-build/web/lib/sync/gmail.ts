@@ -11,7 +11,7 @@
  * Refs: ROADMAP M2.4
  */
 import { google } from "googleapis";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   rawContacts,
@@ -22,6 +22,7 @@ import {
 } from "@/db/schema";
 import { clientFromTokens } from "@/lib/google";
 import { runImport, type ImportCounters } from "./run";
+import { parseAddressEntries } from "./parse-addresses";
 
 // Each Sync now run pulls up to MAX_THREADS_PER_RUN older threads (or
 // brand-new ones since the last sync). This keeps every run under
@@ -258,9 +259,18 @@ export async function syncGmail(sourceId: string) {
               ? new Date(parseInt(m.internalDate, 10))
               : new Date();
 
-            const fromEmail = parseAddresses(fromRaw)[0]?.toLowerCase() ?? null;
-            const toEmails = parseAddresses(toRaw).map((e) => e.toLowerCase());
-            const ccEmails = parseAddresses(ccRaw).map((e) => e.toLowerCase());
+            // Parse with display names so we can name gmail-derived contacts.
+            const fromEntries = parseAddressEntries(fromRaw);
+            const toEntries = parseAddressEntries(toRaw);
+            const ccEntries = parseAddressEntries(ccRaw);
+            const fromEmail = fromEntries[0]?.email ?? null;
+            const toEmails = toEntries.map((e) => e.email);
+            const ccEmails = ccEntries.map((e) => e.email);
+            // address -> display name (first real name wins).
+            const nameByAddr = new Map<string, string>();
+            for (const e of [...fromEntries, ...toEntries, ...ccEntries]) {
+              if (e.name && !nameByAddr.has(e.email)) nameByAddr.set(e.email, e.name);
+            }
 
             const direction =
               selfEmail && fromEmail === selfEmail ? "outbound" : "inbound";
@@ -305,22 +315,31 @@ export async function syncGmail(sourceId: string) {
               (e): e is string => !!e && e !== selfEmail,
             );
             for (const addr of seenAddrs) {
+              const addrName = nameByAddr.get(addr) ?? null;
               await db
                 .insert(rawContacts)
                 .values({
                   sourceId,
                   externalId: addr, // email is the external id for gmail-derived raw contacts
-                  payload: { source: "gmail", email: addr } as Record<
+                  payload: { source: "gmail", email: addr, name: addrName } as Record<
                     string,
                     unknown
                   >,
-                  name: null,
+                  name: addrName,
                   emails: [addr],
                   phones: [],
                   linkedinUrl: null,
                   avatarUrl: null,
                 })
-                .onConflictDoNothing();
+                // Backfill the name once we learn it; never clobber an existing
+                // name with null on a later nameless occurrence of this address.
+                .onConflictDoUpdate({
+                  target: [rawContacts.sourceId, rawContacts.externalId],
+                  set: {
+                    name: sql`coalesce(${rawContacts.name}, excluded.name)`,
+                    updatedAt: new Date(),
+                  },
+                });
             }
           }
           } catch (e) {
@@ -379,17 +398,4 @@ async function setWatermark(sourceId: string, w: GmailWatermark) {
     .update(sources)
     .set({ config: merged, updatedAt: new Date() })
     .where(eq(sources.id, sourceId));
-}
-
-// Parse a header like '"Sarah K." <sarah@example.com>, jane@example.com' into
-// just the email addresses.
-function parseAddresses(raw: string): string[] {
-  if (!raw) return [];
-  const out: string[] = [];
-  const re = /<([^>]+)>|([^,\s]+@[^,\s]+)/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(raw))) {
-    out.push((m[1] ?? m[2] ?? "").trim());
-  }
-  return out.filter(Boolean);
 }
