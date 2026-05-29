@@ -9,6 +9,7 @@
  */
 import { AppShell } from "@/components/AppShell";
 import { SyncButton, UploadCsvButton } from "@/components/SourceActions";
+import { RebuildButton } from "@/components/RebuildButton";
 import { MacAgentCard } from "@/components/MacAgentCard";
 import { requireUser } from "@/lib/auth";
 import { getAllSourcesForUser, SOURCE_LABELS, type SourceKind, type SourceRow } from "@/lib/sources";
@@ -183,10 +184,34 @@ export default async function SourcesPage({
           Settings · Sources
         </p>
         <h1 className="serif-display mb-2 text-[44px] leading-none">Sources.</h1>
-        <p className="mb-10 max-w-[64ch] text-[15px] leading-relaxed" style={{ color: "var(--ink-muted)" }}>
+        <p className="mb-6 max-w-[64ch] text-[15px] leading-relaxed" style={{ color: "var(--ink-muted)" }}>
           Connect each source you want to pull contacts and history from. Every source
           syncs into a single staging area before merge.
         </p>
+
+        {/* One-click full pipeline: sync all → merge → enrich → link. */}
+        <div
+          className="mb-10 rounded-[10px] border p-5"
+          style={{ borderColor: "var(--rule)", background: "var(--stone-raised)" }}
+        >
+          <div className="mb-2 flex items-baseline justify-between gap-3">
+            <h2 className="text-[15px] font-semibold" style={{ color: "var(--ink)" }}>
+              Sync &amp; rebuild
+            </h2>
+            <span className="text-[11.5px]" style={{ color: "var(--ink-faint)" }}>
+              runs nightly automatically
+            </span>
+          </div>
+          <p
+            className="mb-3.5 max-w-[64ch] text-[13px] leading-relaxed"
+            style={{ color: "var(--ink-muted)" }}
+          >
+            Pulls all history from every connected account, merges duplicates,
+            and links your email &amp; messages to the right people — in one click.
+            Leave this tab open while it runs.
+          </p>
+          <RebuildButton />
+        </div>
 
         {(successBanner || errorBanner) && (
           <div
