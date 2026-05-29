@@ -31,7 +31,10 @@ export async function GET(request: Request) {
   const oauth2 = googleOAuthClient();
   const authUrl = oauth2.generateAuthUrl({
     access_type: "offline",
-    prompt: "consent", // forces a refresh_token even on subsequent grants
+    // select_account lets the user pick / add a *different* Google account
+    // (so they can connect work alongside personal); consent forces a
+    // refresh_token even on subsequent grants.
+    prompt: "select_account consent",
     scope: [...GOOGLE_SCOPES],
     state,
     include_granted_scopes: true,

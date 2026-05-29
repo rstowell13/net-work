@@ -16,7 +16,7 @@ type SyncResult = {
   errorMessage?: string;
 };
 
-export function SyncButton({ sourceKind }: { sourceKind: string }) {
+export function SyncButton({ sourceId }: { sourceId: string }) {
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<SyncResult | null>(null);
   const router = useRouter();
@@ -24,7 +24,7 @@ export function SyncButton({ sourceKind }: { sourceKind: string }) {
   const onClick = () => {
     setResult(null);
     startTransition(async () => {
-      const res = await fetch(`/api/sync/${sourceKind}`, { method: "POST" });
+      const res = await fetch(`/api/sync/${sourceId}`, { method: "POST" });
       const json = (await res.json()) as SyncResult & { error?: string };
       if (!res.ok) {
         setResult({

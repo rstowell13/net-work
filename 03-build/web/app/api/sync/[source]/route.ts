@@ -1,9 +1,9 @@
 /**
- * Manual sync trigger.
+ * Manual sync trigger for one connected source.
  *
- * POST /api/sync/[source]
- *   source ∈ { google_contacts, gmail, google_calendar }
- *   (LinkedIn is handled by the file upload endpoint, not here.)
+ * POST /api/sync/[source]   — [source] is the Source row's UUID (a user can
+ * have several Google sources of the same kind across multiple accounts, so we
+ * key on the row id, not the kind). LinkedIn is handled by the upload endpoint.
  *
  * Refs: ROADMAP M2.8
  */
@@ -22,42 +22,32 @@ import { syncGoogleContacts } from "@/lib/sync/google-contacts";
 import { syncGmail } from "@/lib/sync/gmail";
 import { syncGoogleCalendar } from "@/lib/sync/google-calendar";
 
-const SUPPORTED = new Set(["google_contacts", "gmail", "google_calendar"]);
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(
   _req: Request,
   context: { params: Promise<{ source: string }> },
 ) {
   const user = await requireUser();
-  const { source } = await context.params;
+  const { source: sourceId } = await context.params;
 
-  if (!SUPPORTED.has(source)) {
-    return NextResponse.json(
-      { error: `Unsupported source: ${source}` },
-      { status: 400 },
-    );
+  if (!UUID_RE.test(sourceId)) {
+    return NextResponse.json({ error: "Invalid source id" }, { status: 400 });
   }
 
   const [src] = await db
-    .select({ id: sources.id, status: sources.status })
+    .select({ id: sources.id, kind: sources.kind })
     .from(sources)
-    .where(
-      and(
-        eq(sources.userId, user.id),
-        eq(sources.kind, source as "google_contacts" | "gmail" | "google_calendar"),
-      ),
-    )
+    .where(and(eq(sources.id, sourceId), eq(sources.userId, user.id)))
     .limit(1);
 
   if (!src) {
-    return NextResponse.json(
-      { error: `Source ${source} is not connected` },
-      { status: 404 },
-    );
+    return NextResponse.json({ error: "Source not found" }, { status: 404 });
   }
 
   let result;
-  switch (source) {
+  switch (src.kind) {
     case "google_contacts":
       result = await syncGoogleContacts(src.id);
       break;
@@ -68,7 +58,10 @@ export async function POST(
       result = await syncGoogleCalendar(src.id);
       break;
     default:
-      return NextResponse.json({ error: "unreachable" }, { status: 500 });
+      return NextResponse.json(
+        { error: `Sync not supported for ${src.kind}` },
+        { status: 400 },
+      );
   }
 
   return NextResponse.json(result);

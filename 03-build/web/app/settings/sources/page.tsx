@@ -15,14 +15,6 @@ import { getAllSourcesForUser, SOURCE_LABELS, type SourceKind, type SourceRow } 
 
 export const dynamic = "force-dynamic";
 
-const ORDER: SourceKind[] = [
-  "google_contacts",
-  "gmail",
-  "google_calendar",
-  "linkedin_csv",
-  "mac_agent",
-];
-
 const DESCRIPTIONS: Record<SourceKind, string> = {
   google_contacts: "Names, phone numbers, emails, photos, and any LinkedIn URLs you've stored on a contact in Google.",
   gmail: "All email threads — From / To / Subject / Date plus a short body preview. Click Sync now repeatedly to backfill older threads.",
@@ -73,7 +65,6 @@ function SourceCard({
 }) {
   const status = row?.status ?? "not_connected";
   const isGoogle = kind === "google_contacts" || kind === "gmail" || kind === "google_calendar";
-  const isMac = kind === "apple_contacts" || kind === "mac_agent";
 
   return (
     <article
@@ -98,12 +89,6 @@ function SourceCard({
       <div className="mt-4 flex items-center justify-between gap-3 border-t pt-4" style={{ borderColor: "var(--rule)" }}>
         <p className="font-mono text-[11.5px]" style={{ color: "var(--ink-faint)" }}>
           Last sync · {formatRelative(row?.lastSyncAt ?? null)}
-          {row?.config && (row.config as { google_email?: string }).google_email && (
-            <>
-              {" · "}
-              {(row.config as { google_email?: string }).google_email}
-            </>
-          )}
         </p>
 
         {/* Action buttons per kind */}
@@ -111,29 +96,20 @@ function SourceCard({
           {/*
             Show Sync now when status is connected OR error (the source is
             still wired up — error usually means a transient quota/network
-            blip that retrying clears). Show Connect Google only when
-            we've never connected or need re-auth from scratch.
+            blip that retrying clears). needs_reauth means the login expired,
+            so offer Reconnect instead.
           */}
-          {isGoogle && status === "not_connected" && (
-            <a
-              href="/api/auth/google/start"
-              className="rounded-[7px] px-4 py-[7px] text-[13px] font-medium transition-colors"
-              style={{ background: "var(--ink)", color: "var(--stone)" }}
-            >
-              Connect Google
-            </a>
-          )}
           {isGoogle && status === "needs_reauth" && (
             <a
               href="/api/auth/google/start"
               className="rounded-[7px] px-4 py-[7px] text-[13px] font-medium"
               style={{ background: "var(--ink)", color: "var(--stone)" }}
             >
-              Reconnect Google
+              Reconnect
             </a>
           )}
-          {isGoogle && (status === "connected" || status === "error") && (
-            <SyncButton sourceKind={kind} />
+          {isGoogle && row && (status === "connected" || status === "error") && (
+            <SyncButton sourceId={row.id} />
           )}
           {kind === "linkedin_csv" && <UploadCsvButton />}
         </div>
@@ -170,9 +146,27 @@ export default async function SourcesPage({
 }) {
   const user = await requireUser();
   const sourceList = await getAllSourcesForUser(user.id);
-  const byKind = new Map<SourceKind, SourceRow>(
-    sourceList.map((s) => [s.kind, s]),
-  );
+
+  // Google sources can span multiple accounts — group them by account email.
+  const GOOGLE_KINDS: SourceKind[] = [
+    "google_contacts",
+    "gmail",
+    "google_calendar",
+  ];
+  const accountEmailOf = (s: SourceRow) =>
+    s.accountEmail ||
+    (s.config as { google_email?: string } | null)?.google_email ||
+    "";
+  const googleAccounts = new Map<string, SourceRow[]>();
+  for (const s of sourceList) {
+    if (!GOOGLE_KINDS.includes(s.kind)) continue;
+    const key = accountEmailOf(s);
+    const arr = googleAccounts.get(key) ?? [];
+    arr.push(s);
+    googleAccounts.set(key, arr);
+  }
+  const linkedinRow = sourceList.find((s) => s.kind === "linkedin_csv");
+  const macRow = sourceList.find((s) => s.kind === "mac_agent");
 
   const params = await searchParams;
   const successBanner =
@@ -207,11 +201,71 @@ export default async function SourcesPage({
           </div>
         )}
 
-        <div className="flex flex-col gap-4">
-          {ORDER.map((kind) => (
-            <SourceCard key={kind} kind={kind} row={byKind.get(kind)} />
-          ))}
-        </div>
+        {/* Google accounts — one block per connected account */}
+        <section className="mb-8">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2
+              className="text-[12px] font-semibold uppercase tracking-[0.1em]"
+              style={{ color: "var(--ink-faint)" }}
+            >
+              Google accounts
+            </h2>
+            <a
+              href="/api/auth/google/start"
+              className="rounded-[7px] px-3.5 py-[7px] text-[13px] font-medium"
+              style={{ background: "var(--ink)", color: "var(--stone)" }}
+            >
+              + Add Google account
+            </a>
+          </div>
+
+          {googleAccounts.size === 0 ? (
+            <p
+              className="rounded-[10px] border p-6 text-[13.5px] leading-relaxed"
+              style={{
+                borderColor: "var(--rule)",
+                background: "var(--stone-raised)",
+                color: "var(--ink-muted)",
+              }}
+            >
+              No Google account connected yet. Click “Add Google account” to
+              connect Contacts, Gmail, and Calendar.
+            </p>
+          ) : (
+            [...googleAccounts.entries()].map(([email, rows]) => (
+              <div key={email || "google"} className="mb-6">
+                <p
+                  className="mb-2 font-mono text-[12px]"
+                  style={{ color: "var(--ink)" }}
+                >
+                  {email || "Google account"}
+                </p>
+                <div className="flex flex-col gap-4">
+                  {GOOGLE_KINDS.map((kind) => {
+                    const row = rows.find((r) => r.kind === kind);
+                    return row ? (
+                      <SourceCard key={kind} kind={kind} row={row} />
+                    ) : null;
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+        </section>
+
+        {/* Other sources */}
+        <section>
+          <h2
+            className="mb-3 text-[12px] font-semibold uppercase tracking-[0.1em]"
+            style={{ color: "var(--ink-faint)" }}
+          >
+            Other sources
+          </h2>
+          <div className="flex flex-col gap-4">
+            <SourceCard kind="linkedin_csv" row={linkedinRow} />
+            <SourceCard kind="mac_agent" row={macRow} />
+          </div>
+        </section>
       </div>
     </AppShell>
   );
