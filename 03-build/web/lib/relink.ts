@@ -40,6 +40,62 @@ export interface RelinkResult {
 }
 
 /**
+ * The user's own email addresses. These must NEVER be used as a match key when
+ * linking email correspondence to a contact — the user's address appears in the
+ * From/To of nearly every email, so matching on it makes a single self-contact
+ * absorb the entire mailbox. Sourced from each connected Google account's
+ * `config.google_email` (grows automatically when a second account is added)
+ * plus the APP_OWNER_EMAIL env.
+ */
+export async function getSelfEmails(userId: string): Promise<Set<string>> {
+  const set = new Set<string>();
+  // Base: every connected Google account address + the owner env.
+  const rows = await db
+    .select({ config: schema.sources.config })
+    .from(schema.sources)
+    .where(eq(schema.sources.userId, userId));
+  for (const r of rows) {
+    const email = (r.config as { google_email?: string } | null)?.google_email;
+    if (email) set.add(email.toLowerCase());
+  }
+  const owner = process.env.APP_OWNER_EMAIL?.toLowerCase();
+  if (owner) set.add(owner);
+  if (set.size === 0) return set;
+
+  // Expand: any contact whose card carries a base self address IS the user, so
+  // every address on that card (aliases, work email, etc.) is also "self".
+  const base = [...set];
+  const selfRaws = await db
+    .select({ contactId: schema.rawContacts.contactId })
+    .from(schema.rawContacts)
+    .innerJoin(
+      schema.contacts,
+      eq(schema.contacts.id, schema.rawContacts.contactId),
+    )
+    .where(
+      and(
+        eq(schema.contacts.userId, userId),
+        arrayOverlaps(schema.rawContacts.emails, base),
+      ),
+    );
+  const selfContactIds = [
+    ...new Set(
+      selfRaws.map((r) => r.contactId).filter((id): id is string => !!id),
+    ),
+  ];
+  if (selfContactIds.length > 0) {
+    const moreRaws = await db
+      .select({ emails: schema.rawContacts.emails })
+      .from(schema.rawContacts)
+      .where(inArray(schema.rawContacts.contactId, selfContactIds));
+    for (const r of moreRaws) {
+      for (const e of r.emails ?? []) if (e) set.add(e.toLowerCase());
+    }
+  }
+  return set;
+}
+
+/**
  * Relink one contact's diary rows.
  *
  * Strategy:
@@ -51,7 +107,49 @@ export interface RelinkResult {
  *  6. UPDATE call_logs.contact_id WHERE handle ∈ phones.
  *  7. UPDATE calendar_events.contact_id WHERE attendees && emails.
  */
+/**
+ * Fill a contact's primaryEmail/primaryPhone from its (non-self) raw records
+ * when currently empty. Never overrides a primary already chosen at merge time.
+ */
+async function refreshContactPrimaries(
+  contactId: string,
+  emailsArr: string[],
+  phonesArr: string[],
+): Promise<void> {
+  if (emailsArr.length === 0 && phonesArr.length === 0) return;
+  const [c] = await db
+    .select({
+      primaryEmail: schema.contacts.primaryEmail,
+      primaryPhone: schema.contacts.primaryPhone,
+    })
+    .from(schema.contacts)
+    .where(eq(schema.contacts.id, contactId))
+    .limit(1);
+  if (!c) return;
+  const set: { primaryEmail?: string; primaryPhone?: string; updatedAt: Date } = {
+    updatedAt: new Date(),
+  };
+  let changed = false;
+  if (!c.primaryEmail && emailsArr[0]) {
+    set.primaryEmail = emailsArr[0];
+    changed = true;
+  }
+  if (!c.primaryPhone && phonesArr[0]) {
+    set.primaryPhone = phonesArr[0];
+    changed = true;
+  }
+  if (!changed) return;
+  await db.update(schema.contacts).set(set).where(eq(schema.contacts.id, contactId));
+}
+
 export async function relinkContact(contactId: string): Promise<RelinkResult> {
+  const [owner] = await db
+    .select({ userId: schema.contacts.userId })
+    .from(schema.contacts)
+    .where(eq(schema.contacts.id, contactId))
+    .limit(1);
+  const selfEmails = owner ? await getSelfEmails(owner.userId) : new Set<string>();
+
   const raws = await db
     .select({
       emails: schema.rawContacts.emails,
@@ -63,11 +161,18 @@ export async function relinkContact(contactId: string): Promise<RelinkResult> {
   const emails = new Set<string>();
   const phones = new Set<string>();
   for (const r of raws) {
-    for (const e of r.emails ?? []) if (e) emails.add(e.toLowerCase());
+    for (const e of r.emails ?? []) {
+      const lo = e?.toLowerCase();
+      if (lo && !selfEmails.has(lo)) emails.add(lo);
+    }
     for (const p of r.phones ?? []) if (p) phones.add(p);
   }
   const emailsArr = [...emails];
   const phonesArr = [...phones];
+
+  // Keep the contact's primary email/phone populated from its (non-self) raw
+  // records so the contact card and list view show contact info.
+  await refreshContactPrimaries(contactId, emailsArr, phonesArr);
 
   const result: RelinkResult = {
     contactId,
@@ -229,6 +334,8 @@ export async function relinkAfterMerge(
     calendarEvents: 0,
   };
 
+  const selfEmails = await getSelfEmails(userId);
+
   // Step 1: build lookup maps from this user's raw_contacts.
   const raws = await db
     .select({
@@ -256,6 +363,7 @@ export async function relinkAfterMerge(
     for (const e of r.emails ?? []) {
       if (!e) continue;
       const lower = e.toLowerCase();
+      if (selfEmails.has(lower)) continue; // never match on the user's own address
       if (!emailToContact.has(lower)) emailToContact.set(lower, r.contactId);
     }
   }
