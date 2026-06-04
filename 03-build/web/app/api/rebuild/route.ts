@@ -8,6 +8,7 @@ import { runRebuildPass } from "@/lib/rebuild";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+export const preferredRegion = "iad1"; // co-locate with the us-east-1 database
 
 export async function POST() {
   const user = await getCurrentUser();
