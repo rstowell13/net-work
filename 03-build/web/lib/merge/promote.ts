@@ -19,7 +19,7 @@
  * Refs: plan Phase 1, Step 3.
  */
 import "server-only";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { normalizeName } from "./normalize";
 import { qualifiesForPromotion } from "./promote-criteria";
@@ -34,7 +34,10 @@ export interface PromoteStats {
   skipped: number;
 }
 
-export async function enrichAndPromote(userId: string): Promise<PromoteStats> {
+export async function enrichAndPromote(
+  userId: string,
+  opts: { relink?: boolean } = {},
+): Promise<PromoteStats> {
   const stats: PromoteStats = {
     considered: 0,
     attachedToExisting: 0,
@@ -141,45 +144,31 @@ export async function enrichAndPromote(userId: string): Promise<PromoteStats> {
     }
   }
 
-  // 3. Two-way interaction counts for the create-new candidates.
+  // 3. Two-way interaction counts for the create-new candidates. Fetch the
+  // email directions/addresses ONCE and count in memory — the previous
+  // per-chunk `unnest(to_emails)` aggregation seq-scanned the whole emails
+  // table several times and stalled on a large mailbox.
   if (createNew.length > 0) {
-    const addrs = [...new Set(createNew.map((c) => c.email))];
+    const wanted = new Set(createNew.map((c) => c.email));
     const inbound = new Map<string, number>();
     const outbound = new Map<string, number>();
-    const CHUNK = 500;
-    for (let i = 0; i < addrs.length; i += CHUNK) {
-      const slice = addrs.slice(i, i + CHUNK);
-      const inRows = await db
-        .select({
-          addr: sql<string>`lower(${schema.emails.fromEmail})`,
-          n: sql<number>`count(*)::int`,
-        })
-        .from(schema.emails)
-        .where(
-          and(
-            eq(schema.emails.direction, "inbound"),
-            inArray(sql`lower(${schema.emails.fromEmail})`, slice),
-          ),
-        )
-        .groupBy(sql`lower(${schema.emails.fromEmail})`);
-      for (const row of inRows) inbound.set(row.addr, row.n);
-
-      const outRows = await db
-        .select({
-          addr: sql<string>`lower(t.addr)`,
-          n: sql<number>`count(*)::int`,
-        })
-        .from(
-          sql`${schema.emails}, unnest(${schema.emails.toEmails}) as t(addr)`,
-        )
-        .where(
-          and(
-            eq(schema.emails.direction, "outbound"),
-            inArray(sql`lower(t.addr)`, slice),
-          ),
-        )
-        .groupBy(sql`lower(t.addr)`);
-      for (const row of outRows) outbound.set(row.addr, row.n);
+    const allEmails = await db
+      .select({
+        direction: schema.emails.direction,
+        fromEmail: schema.emails.fromEmail,
+        toEmails: schema.emails.toEmails,
+      })
+      .from(schema.emails);
+    for (const e of allEmails) {
+      if (e.direction === "inbound") {
+        const f = e.fromEmail?.toLowerCase();
+        if (f && wanted.has(f)) inbound.set(f, (inbound.get(f) ?? 0) + 1);
+      } else {
+        for (const t of e.toEmails ?? []) {
+          const lo = t.toLowerCase();
+          if (wanted.has(lo)) outbound.set(lo, (outbound.get(lo) ?? 0) + 1);
+        }
+      }
     }
 
     // Within this run, a person can own several addresses (all same name).
@@ -229,10 +218,15 @@ export async function enrichAndPromote(userId: string): Promise<PromoteStats> {
   }
 
   // 4. Relink every affected contact so correspondence + primaries populate.
-  for (const cid of affected) {
-    await relinkContact(cid).catch((err) => {
-      console.error(`enrichAndPromote relink failed for ${cid}:`, err);
-    });
+  // Skippable (opts.relink === false) when the caller runs a single global
+  // relinkAfterMerge afterward — per-contact relink over a large dangling
+  // backlog is too slow.
+  if (opts.relink !== false) {
+    for (const cid of affected) {
+      await relinkContact(cid).catch((err) => {
+        console.error(`enrichAndPromote relink failed for ${cid}:`, err);
+      });
+    }
   }
 
   return stats;
