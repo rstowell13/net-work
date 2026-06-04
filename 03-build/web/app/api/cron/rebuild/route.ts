@@ -24,6 +24,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  if (new URL(req.url).searchParams.get("ping")) {
+    return NextResponse.json({ region: process.env.VERCEL_REGION ?? "unknown" });
+  }
+
   const ownerEmail = await getOwnerEmail();
   const [owner] = await db
     .select({ id: schema.users.id })
