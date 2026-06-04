@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq, gte, sql, desc, inArray, isNull, isNotNull } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { computeFreshness, type FreshnessResult } from "@/lib/scoring/freshness";
+import { aggregateTags, type Tag } from "@/lib/tags/queries";
 
 export interface ContactListRow {
   id: string;
@@ -15,12 +16,14 @@ export interface ContactListRow {
   freshness: FreshnessResult;
   sources: string[]; // distinct source kinds via raw_contacts
   rawCount: number;
+  tags: Tag[];
 }
 
 export interface ContactListFilters {
   status?: "to_triage" | "kept" | "skipped" | "all";
   category?: "personal" | "business" | "both" | "uncategorized";
   recency?: "0_30" | "30_90" | "90_365" | "365_plus" | null;
+  tags?: string[]; // tag IDs; matches contacts carrying ANY of them (OR)
 }
 
 async function aggregateLastSeen(
@@ -173,6 +176,18 @@ export async function listContacts(
       conds.push(eq(schema.contacts.category, filters.category));
     }
   }
+  if (filters.tags && filters.tags.length > 0) {
+    // Contacts carrying ANY of the selected tags (OR). Resolve matching ids
+    // up front, then constrain the main query — consistent with the JS-merge
+    // style used elsewhere in this module.
+    const tagged = await db
+      .select({ contactId: schema.contactTags.contactId })
+      .from(schema.contactTags)
+      .where(inArray(schema.contactTags.tagId, filters.tags));
+    const taggedIds = [...new Set(tagged.map((r) => r.contactId))];
+    if (taggedIds.length === 0) return [];
+    conds.push(inArray(schema.contacts.id, taggedIds));
+  }
 
   const rows = await db
     .select()
@@ -182,10 +197,11 @@ export async function listContacts(
     .limit(limit);
 
   const ids = rows.map((r) => r.id);
-  const [lastSeen, sources, freq] = await Promise.all([
+  const [lastSeen, sources, freq, tags] = await Promise.all([
     aggregateLastSeen(ids),
     aggregateSources(ids),
     aggregateInteractions365(ids),
+    aggregateTags(ids),
   ]);
 
   let result: ContactListRow[] = rows.map((c) => {
@@ -207,6 +223,7 @@ export async function listContacts(
       }),
       sources: [...src.kinds],
       rawCount: src.count,
+      tags: tags.get(c.id) ?? [],
     };
   });
 

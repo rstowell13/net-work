@@ -35,9 +35,9 @@ Before code can begin. I'll guide him through each on day 1.
 
 ## Project state
 
-- **Current phase:** Phase 4 (Build) — All v1 milestones complete. v1 shipped.
-- **Last updated:** 2026-04-27.
-- **Next action:** v1 shipped on 2026-04-27. Post-v1 features tracked in the post-v1 backlog section.
+- **Current phase:** Phase 4 (Build) — v1 shipped. Post-v1 features ongoing.
+- **Last updated:** 2026-06-04.
+- **Next action:** Custom tags feature built on branch `feat/custom-tags` (see "Post-v1 shipped" below). Remaining: visual pass while signed in, then merge.
 
 ---
 
@@ -319,6 +319,31 @@ Before code can begin. I'll guide him through each on day 1.
 **Verification:** Robb can run the full weekly loop without any DB fiddling. v1 is shippable.
 
 ---
+
+## Post-v1 shipped
+
+### Custom tags + tag-driven outreach rules (branch `feat/custom-tags`, 2026-06-04)
+
+Free-form tags on contacts (many per person), layered on top of the
+personal/business/both category. The `tags`, `contact_tags`, and
+`tag_cadence_rules` tables already existed in the schema (unused) — no migration
+needed; this wired them up across queries, API, UI, and the suggestion ranking.
+
+- **Tag display** — chips on the contacts list (replacing the old source-account
+  labels, which now live only on the contact detail page) and on each contact's
+  detail page, where a search-or-create picker assigns/removes tags inline.
+- **Bulk tagging** — Add tag… / Remove tag… in the contacts multi-select toolbar.
+- **Filter** — Tags block in the contacts sidebar (multi-select, OR).
+- **Manage** — Settings → Tags: create, recolor, rename, merge, delete (+ counts).
+- **Goals** — Settings → Cadence → "Per-tag goals" (N per week/month/quarter, with
+  current-window progress). Under-served tags get a ranking boost in Suggestions
+  with a reason like "volleyball: 0 of 1 this month".
+
+New files: `lib/tags/{colors,types,queries}.ts`, `lib/suggestions/{tag-cadence,
+tag-cadence-data}.ts`, `app/api/tags/**`, `app/api/contacts/[id]/tags`,
+`app/api/tag-cadence`, `components/{TagChip,TagPicker,ContactTags,TagManager,
+TagCadenceForm}.tsx`, `app/settings/tags/page.tsx`, tests under `tests/tags/`.
+Verified: 58 vitest pass (13 new), tsc clean, build clean, live-DB round-trip.
 
 ## Post-v1 backlog (NOT in scope)
 

@@ -3,6 +3,9 @@ import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { listContacts } from "@/lib/contacts/queries";
 import { ensurePlan } from "@/lib/weekly-plan";
+import { loadTagRules, shortfallsFromPool } from "./tag-cadence-data";
+import { tagBoostFor } from "./tag-cadence";
+import type { Tag } from "@/lib/tags/types";
 
 export interface SuggestionCandidate {
   contactId: string;
@@ -11,6 +14,7 @@ export interface SuggestionCandidate {
   primaryPhone: string | null;
   photoUrl: string | null;
   category: "personal" | "business" | "both" | null;
+  tags: Tag[];
   freshness: number; // 0..100
   band: string;
   daysSince: number | null;
@@ -82,6 +86,10 @@ export async function getCandidates(
     1000,
   );
 
+  // Per-tag outreach goals: how far behind each tag is for its window.
+  const tagRules = await loadTagRules(userId);
+  const tagShortfalls = shortfallsFromPool(tagRules, pool, new Date());
+
   // Filter out contacts already in the current plan.
   const plan = await ensurePlan(userId);
   const inPlan = await db
@@ -142,11 +150,18 @@ export async function getCandidates(
       if (c.category === "personal" && needPersonal > 0) categoryBoost = 15;
       if ((c.category === "business" || c.category === "both") && needBusiness > 0)
         categoryBoost = 15;
-      const score = urgency + categoryBoost;
-      const reason =
+      const { boost: tagBoost, reason: tagReason } = tagBoostFor(
+        c.tags.map((t) => t.id),
+        tagShortfalls,
+      );
+      const score = urgency + categoryBoost + tagBoost;
+      const freshnessReason =
         c.freshness.daysSince !== null
           ? `${c.freshness.daysSince}d since last contact`
           : "no recorded contact yet";
+      const reason = tagReason
+        ? `${tagReason} · ${freshnessReason}`
+        : freshnessReason;
       return {
         contactId: c.id,
         displayName: c.displayName,
@@ -154,6 +169,7 @@ export async function getCandidates(
         primaryPhone: c.primaryPhone,
         photoUrl: c.photoUrl,
         category: c.category,
+        tags: c.tags,
         freshness: f,
         band: c.freshness.band,
         daysSince: c.freshness.daysSince,

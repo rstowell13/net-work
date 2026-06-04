@@ -13,8 +13,10 @@ import {
 import { AddToWeekButton } from "@/components/AddToWeekButton";
 import { RefreshThreadSummaries } from "@/components/RefreshThreadSummaries";
 import { DiaryThreadOpener } from "@/components/DiaryThreadOpener";
+import { ContactTags } from "@/components/ContactTags";
 import { requireUser } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
+import { getTagsForContact, listTags } from "@/lib/tags/queries";
 import { getDiary, getRelationshipInputs } from "@/lib/diary";
 import { getOrGenerateRelationshipSummary } from "@/lib/llm/summary";
 import { computeFreshness, bandColor, bandLabel } from "@/lib/scoring/freshness";
@@ -49,6 +51,8 @@ export default async function ContactDetailPage({
     followUps,
     relInputs,
     mergeCandidate,
+    contactTags,
+    allTags,
   ] = await Promise.all([
     db
       .select({
@@ -82,6 +86,8 @@ export default async function ContactDetailPage({
       .where(eq(schema.mergeCandidates.resultingContactId, id))
       .orderBy(desc(schema.mergeCandidates.resolvedAt))
       .limit(1),
+    getTagsForContact(id),
+    listTags(user.id),
   ]);
 
   // Last seen + interactions for freshness
@@ -304,6 +310,23 @@ export default async function ContactDetailPage({
             </span>
           </div>
         </section>
+
+        <div
+          className="flex flex-wrap items-center gap-2.5 border-b py-4"
+          style={{ borderColor: "var(--rule)" }}
+        >
+          <span
+            className="text-[10.5px] font-semibold uppercase tracking-[0.14em]"
+            style={{ color: "var(--ink-faint)" }}
+          >
+            Tags
+          </span>
+          <ContactTags
+            contactId={contact.id}
+            initial={contactTags}
+            allTags={allTags}
+          />
+        </div>
 
         <div
           className="flex flex-wrap items-center justify-between gap-4 border-b py-5"
