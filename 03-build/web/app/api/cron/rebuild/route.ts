@@ -34,7 +34,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "owner not found" }, { status: 404 });
   }
 
-  const deadline = Date.now() + 50_000;
+  const deadline = Date.now() + 30_000; // only start a pass with headroom for a full ~25s pass under 60s
   let passes = 0;
   let last: Awaited<ReturnType<typeof runRebuildPass>> | undefined;
   for (let i = 0; i < 20 && Date.now() < deadline; i++) {
