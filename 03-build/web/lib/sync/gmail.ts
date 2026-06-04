@@ -34,8 +34,8 @@ import { parseAddressEntries } from "./parse-addresses";
 //   - newest_synced_unix: newest internalDate seen so far (seconds).
 //     Future runs can use `after:` to pick up incremental new mail.
 const MAX_THREADS_PER_RUN = 200;
-const FETCH_CONCURRENCY = 10;
-const TIME_BUDGET_MS = 20_000; // stay well under the 60s function limit
+const FETCH_CONCURRENCY = 5;
+const TIME_BUDGET_MS = 12_000; // one chunk well under the 60s function limit
 
 // Gmail's per-user-per-minute quota is ~250 quota units; threads.get costs 5
 // each. We back off gracefully on 429s instead of treating them as failures.
