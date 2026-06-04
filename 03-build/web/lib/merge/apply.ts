@@ -73,6 +73,7 @@ async function loadMembers(rawIds: string[]): Promise<MemberRow[]> {
 export async function applyCandidate(
   userId: string,
   candidateId: string,
+  opts: { relink?: boolean } = {},
 ): Promise<{ contactId: string }> {
   const [candidate] = await db
     .select()
@@ -133,11 +134,15 @@ export async function applyCandidate(
   });
 
   // Stamp diary tables (messages, emails, calls, calendar) with the new
-  // contactId. Cheap per-contact and runs outside the transaction so a
-  // relink failure doesn't unwind the merge.
-  await relinkContact(contactId).catch((err) => {
-    console.error(`relink failed for contact ${contactId}:`, err);
-  });
+  // contactId. Runs outside the transaction so a relink failure doesn't unwind
+  // the merge. Skippable (opts.relink === false) for bulk rebuilds that do a
+  // single global relinkAfterMerge at the end — calling it per-merge over a
+  // large dangling backlog is too slow.
+  if (opts.relink !== false) {
+    await relinkContact(contactId).catch((err) => {
+      console.error(`relink failed for contact ${contactId}:`, err);
+    });
+  }
 
   return { contactId };
 }
@@ -145,13 +150,14 @@ export async function applyCandidate(
 export async function bulkApply(
   userId: string,
   candidateIds: string[],
+  opts: { relink?: boolean } = {},
 ): Promise<{ applied: number; failed: number; errors: string[] }> {
   let applied = 0;
   let failed = 0;
   const errors: string[] = [];
   for (const id of candidateIds) {
     try {
-      await applyCandidate(userId, id);
+      await applyCandidate(userId, id, opts);
       applied++;
     } catch (e) {
       failed++;

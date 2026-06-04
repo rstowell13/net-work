@@ -443,64 +443,91 @@ export async function relinkAfterMerge(
     return ids.length;
   });
 
-  // Step 2c: emails — single SQL query per contact still wins because
-  // from_email is exact and to_emails uses array overlap operator that
-  // postgres can index. Loop per contact id.
-  for (const cid of contactIds) {
-    // Reverse-lookup the emails for this contact id.
-    const emailsForContact: string[] = [];
-    for (const [email, mappedCid] of emailToContact)
-      if (mappedCid === cid) emailsForContact.push(email);
-    if (emailsForContact.length === 0) continue;
+  // Step 2c: emails — fetch all dangling rows ONCE, match each to a contact via
+  // the email→contact map (self-excluded), then batch-update grouped by contact.
+  // O(dangling) instead of O(contacts × emails) — a large backlog (tens of
+  // thousands of unlinked emails) used to make this scan the emails table once
+  // per contact and blow past the function time limit.
+  const danglingEmails = await db
+    .select({
+      id: schema.emails.id,
+      fromEmail: schema.emails.fromEmail,
+      toEmails: schema.emails.toEmails,
+      threadId: schema.emails.threadId,
+    })
+    .from(schema.emails)
+    .where(isNull(schema.emails.contactId));
 
-    const updatedEmails = await db
+  const emailMatches: { id: string; cid: string }[] = [];
+  const threadsByContact = new Map<string, Set<string>>();
+  for (const e of danglingEmails) {
+    let cid = e.fromEmail
+      ? emailToContact.get(e.fromEmail.toLowerCase())
+      : undefined;
+    if (!cid) {
+      for (const t of e.toEmails ?? []) {
+        const c = emailToContact.get(t.toLowerCase());
+        if (c) {
+          cid = c;
+          break;
+        }
+      }
+    }
+    if (!cid) continue;
+    emailMatches.push({ id: e.id, cid });
+    if (e.threadId) {
+      const s = threadsByContact.get(cid) ?? new Set<string>();
+      s.add(e.threadId);
+      threadsByContact.set(cid, s);
+    }
+  }
+  totals.emails = await updateByGroup(emailMatches, async (cid, ids) => {
+    await db
       .update(schema.emails)
       .set({ contactId: cid })
+      .where(inArray(schema.emails.id, ids));
+    return ids.length;
+  });
+  // Cascade to email_threads.
+  for (const [cid, tids] of threadsByContact) {
+    const updated = await db
+      .update(schema.emailThreads)
+      .set({ contactId: cid, updatedAt: new Date() })
       .where(
         and(
-          isNull(schema.emails.contactId),
-          or(
-            inArray(schema.emails.fromEmail, emailsForContact),
-            arrayOverlaps(schema.emails.toEmails, emailsForContact),
-          ),
+          inArray(schema.emailThreads.id, [...tids]),
+          isNull(schema.emailThreads.contactId),
         ),
       )
-      .returning({ id: schema.emails.id, threadId: schema.emails.threadId });
-    totals.emails += updatedEmails.length;
+      .returning({ id: schema.emailThreads.id });
+    totals.emailThreads += updated.length;
+  }
 
-    const threadIds = [
-      ...new Set(
-        updatedEmails
-          .map((e) => e.threadId)
-          .filter((id): id is string => !!id),
-      ),
-    ];
-    if (threadIds.length > 0) {
-      const updatedThreads = await db
-        .update(schema.emailThreads)
-        .set({ contactId: cid, updatedAt: new Date() })
-        .where(
-          and(
-            inArray(schema.emailThreads.id, threadIds),
-            isNull(schema.emailThreads.contactId),
-          ),
-        )
-        .returning({ id: schema.emailThreads.id });
-      totals.emailThreads += updatedThreads.length;
+  // Calendar events — fetch dangling once, match by attendee overlap.
+  const danglingEvents = await db
+    .select({
+      id: schema.calendarEvents.id,
+      attendees: schema.calendarEvents.attendees,
+    })
+    .from(schema.calendarEvents)
+    .where(isNull(schema.calendarEvents.contactId));
+  const eventMatches: { id: string; cid: string }[] = [];
+  for (const ev of danglingEvents) {
+    for (const a of ev.attendees ?? []) {
+      const c = emailToContact.get(a.toLowerCase());
+      if (c) {
+        eventMatches.push({ id: ev.id, cid: c });
+        break;
+      }
     }
-
-    const updatedEvents = await db
+  }
+  totals.calendarEvents = await updateByGroup(eventMatches, async (cid, ids) => {
+    await db
       .update(schema.calendarEvents)
       .set({ contactId: cid })
-      .where(
-        and(
-          isNull(schema.calendarEvents.contactId),
-          arrayOverlaps(schema.calendarEvents.attendees, emailsForContact),
-        ),
-      )
-      .returning({ id: schema.calendarEvents.id });
-    totals.calendarEvents += updatedEvents.length;
-  }
+      .where(inArray(schema.calendarEvents.id, ids));
+    return ids.length;
+  });
 
   return { contacts: contactIds.size, totals };
 }

@@ -120,12 +120,15 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
         inArray(schema.mergeCandidates.confidence, ["exact", "high"]),
       ),
     );
+  // Skip the per-merge / per-contact relinks here — a single global
+  // relinkAfterMerge at the end handles all of it in one O(dangling) pass.
   const merged = await bulkApply(
     userId,
     safe.map((c) => c.id),
+    { relink: false },
   );
 
-  const promoted = await enrichAndPromote(userId);
+  const promoted = await enrichAndPromote(userId, { relink: false });
   const relink = await relinkAfterMerge(userId);
 
   return {
