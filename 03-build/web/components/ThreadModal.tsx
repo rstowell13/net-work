@@ -204,7 +204,7 @@ export function ThreadModal({
                 marginTop: 16,
               }}
             >
-              Couldn't load thread: {error}
+              Couldn&apos;t load thread: {error}
             </p>
           )}
           {!data && !error && <SkeletonBubbles />}
