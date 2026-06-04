@@ -93,16 +93,34 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
     };
   }
 
-  // --- Rebuild phase: syncs are current. ---
-  // Pull any *new* mail incrementally from each live Gmail source (cheap once
-  // caught up — uses after:<newest>), then rebuild the contact graph.
-  for (const r of rows) {
-    if (r.kind === "gmail" && r.status !== "needs_reauth") {
-      try {
-        await syncGmail(r.id);
-      } catch (e) {
-        console.error("rebuild: incremental gmail failed", r.id, e);
-      }
+  // --- Rebuild phase: backfills are complete. ---
+  // Pull new mail incrementally, but at most ONE *productive* Gmail sync per
+  // pass: each syncGmail can use its full ~50s budget, so syncing two accounts
+  // back-to-back could exceed the 60s function limit. A sync that returned rows
+  // means more may remain → stay in the syncing phase and let the button/cron
+  // loop call us again. Only when every account reports nothing new do we fall
+  // through to the (DB-only, fast) rebuild.
+  const newestUnix = (cfg: unknown) =>
+    Number((cfg as { newest_synced_unix?: number } | null)?.newest_synced_unix ?? 0);
+  const gmailRows = rows
+    .filter((r) => r.kind === "gmail" && r.status !== "needs_reauth")
+    .sort((a, b) => newestUnix(a.config) - newestUnix(b.config));
+  for (const g of gmailRows) {
+    let seen = 0;
+    try {
+      const r = await syncGmail(g.id);
+      seen = r.recordsSeen;
+    } catch (e) {
+      console.error("rebuild: incremental gmail failed", g.id, e);
+      continue;
+    }
+    if (seen > 0) {
+      return {
+        phase: "syncing",
+        done: false,
+        detail: `Fetching new mail · ${g.accountEmail || "account"}`,
+        syncedThreads: seen,
+      };
     }
   }
 
