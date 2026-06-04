@@ -23,7 +23,7 @@ import { relinkAfterMerge } from "@/lib/relink";
 const GOOGLE_KINDS = ["google_contacts", "gmail", "google_calendar"] as const;
 
 export interface RebuildPass {
-  phase: "syncing" | "done";
+  phase: "syncing" | "merging" | "done";
   done: boolean;
   detail: string;
   syncedThreads?: number;
@@ -124,10 +124,14 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
     }
   }
 
-  const dedupe = await runDedupe(userId);
+  await runDedupe(userId);
 
   // Auto-apply the "safe" set (exact email + high name/phone/linkedin) — the
-  // same bucket the /merge page bulk-merges. Ambiguous stay for manual review.
+  // same bucket the /merge page bulk-merges. Apply in a BOUNDED batch per pass:
+  // each applyCandidate is several round-trips, so merging a large backlog
+  // (hundreds of candidates) in one call exceeds the 60s function limit. If
+  // more remain, stay in the merging phase and let the button/cron loop on.
+  const MERGE_BATCH = 50;
   const safe = await db
     .select({ id: schema.mergeCandidates.id })
     .from(schema.mergeCandidates)
@@ -137,15 +141,23 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
         eq(schema.mergeCandidates.status, "pending"),
         inArray(schema.mergeCandidates.confidence, ["exact", "high"]),
       ),
+    )
+    .limit(MERGE_BATCH);
+  if (safe.length > 0) {
+    // Skip the per-merge relink here — the final pass does one global relink.
+    const merged = await bulkApply(
+      userId,
+      safe.map((c) => c.id),
+      { relink: false },
     );
-  // Skip the per-merge / per-contact relinks here — a single global
-  // relinkAfterMerge at the end handles all of it in one O(dangling) pass.
-  const merged = await bulkApply(
-    userId,
-    safe.map((c) => c.id),
-    { relink: false },
-  );
+    return {
+      phase: "merging",
+      done: false,
+      detail: `Merging duplicates (${merged.applied})`,
+    };
+  }
 
+  // No safe merges left → finalize: enrich + one global relink.
   const promoted = await enrichAndPromote(userId, { relink: false });
   const relink = await relinkAfterMerge(userId);
 
@@ -154,8 +166,6 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
     done: true,
     detail: "Rebuild complete",
     stats: {
-      candidatesCreated: dedupe.candidatesCreated,
-      merged: merged.applied,
       contactsCreated: promoted.created,
       contactsEnriched: promoted.attachedToExisting,
       emailThreadsLinked: relink.totals.emailThreads,
