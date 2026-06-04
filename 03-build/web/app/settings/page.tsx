@@ -27,7 +27,12 @@ export default function SettingsPage() {
           <SettingsLink
             href="/settings/cadence"
             title="Cadence"
-            desc="Weekly target, personal/business mix, min days since last contact."
+            desc="Weekly target, personal/business mix, per-tag goals, min days since last contact."
+          />
+          <SettingsLink
+            href="/settings/tags"
+            title="Tags"
+            desc="Create, color, merge, and delete your custom tags."
           />
         </div>
       </div>

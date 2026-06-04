@@ -8,6 +8,7 @@ import {
   getCategoryCounts,
   type ContactListFilters,
 } from "@/lib/contacts/queries";
+import { listTags, getTagCounts } from "@/lib/tags/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ type Search = {
   status?: string;
   category?: string;
   recency?: string;
+  tags?: string; // comma-separated tag IDs
 };
 
 export default async function ContactsPage({
@@ -36,13 +38,17 @@ export default async function ContactsPage({
       (["0_30", "30_90", "90_365", "365_plus"] as const).find(
         (r) => r === sp.recency,
       ) ?? null,
+    tags: sp.tags ? sp.tags.split(",").filter(Boolean) : undefined,
   };
 
-  const [rows, statusCounts, catCounts] = await Promise.all([
+  const [rows, statusCounts, catCounts, allTags, tagCounts] = await Promise.all([
     listContacts(user.id, filters, 500),
     getStatusCounts(user.id),
     getCategoryCounts(user.id),
+    listTags(user.id),
+    getTagCounts(user.id),
   ]);
+  const selectedTags = new Set(filters.tags ?? []);
 
   const serialized = rows.map((r) => ({
     ...r,
@@ -131,6 +137,28 @@ export default async function ContactsPage({
             )}
           </FilterBlock>
 
+          {allTags.length > 0 && (
+            <FilterBlock title="Tags">
+              {allTags.map((t) => (
+                <FilterLink
+                  key={t.id}
+                  label={t.name}
+                  count={tagCounts.get(t.id) ?? 0}
+                  active={selectedTags.has(t.id)}
+                  href={toggleTagHref(sp, t.id)}
+                />
+              ))}
+              {selectedTags.size > 0 && (
+                <FilterLink
+                  label="Clear"
+                  count={null}
+                  active={false}
+                  href={hrefFor(sp, { tags: undefined })}
+                />
+              )}
+            </FilterBlock>
+          )}
+
           <FilterBlock title="Recency">
             <FilterLink
               label="< 30 days"
@@ -193,7 +221,7 @@ export default async function ContactsPage({
               {filters.category ? ` · ${filters.category}` : ""}
             </p>
           </div>
-          <ContactsList rows={serialized} />
+          <ContactsList rows={serialized} allTags={allTags} />
         </main>
       </div>
     </AppShell>
@@ -266,4 +294,12 @@ function hrefFor(
   }
   const qs = new URLSearchParams(merged).toString();
   return `/contacts${qs ? `?${qs}` : ""}`;
+}
+
+/** Toggle a single tag id within the comma-separated `tags` param (OR filter). */
+function toggleTagHref(current: Search, tagId: string): string {
+  const ids = new Set((current.tags ?? "").split(",").filter(Boolean));
+  if (ids.has(tagId)) ids.delete(tagId);
+  else ids.add(tagId);
+  return hrefFor(current, { tags: ids.size ? [...ids].join(",") : undefined });
 }

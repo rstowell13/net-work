@@ -3,17 +3,20 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { FreshnessRing } from "@/components/FreshnessRing";
+import { TagChip } from "@/components/TagChip";
 import {
   bandColor,
   bandLabel,
   computeFreshness,
 } from "@/lib/scoring/freshness";
+import type { Tag } from "@/lib/tags/types";
 
 interface Candidate {
   contactId: string;
   displayName: string;
   photoUrl: string | null;
   category: "personal" | "business" | "both" | null;
+  tags: Tag[];
   freshness: number;
   band: string;
   daysSince: number | null;
@@ -207,6 +210,13 @@ export function SuggestionsFlow({ candidates, cadence }: Props) {
             {cur.category && <span>{cur.category} · </span>}
             {cur.reason}
           </p>
+          {cur.tags.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {cur.tags.map((t) => (
+                <TagChip key={t.id} name={t.name} color={t.color} />
+              ))}
+            </div>
+          )}
         </header>
 
         {/* Desktop header — original layout */}
@@ -241,6 +251,13 @@ export function SuggestionsFlow({ candidates, cadence }: Props) {
               {cur.category && <span>{cur.category} · </span>}
               {cur.reason}
             </p>
+            {cur.tags.length > 0 && (
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {cur.tags.map((t) => (
+                  <TagChip key={t.id} name={t.name} color={t.color} />
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex flex-col items-center gap-1.5">
             <FreshnessRing result={freshness} size="md" />
