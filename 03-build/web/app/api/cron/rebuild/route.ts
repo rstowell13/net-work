@@ -8,10 +8,13 @@
  * PUBLIC_PATHS so the session middleware doesn't redirect it.
  */
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { getOwnerEmail } from "@/lib/auth";
 import { runRebuildPass } from "@/lib/rebuild";
+import { runDedupe } from "@/lib/merge/dedupe";
+import { enrichAndPromote } from "@/lib/merge/promote";
+import { relinkAfterMerge } from "@/lib/relink";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -32,6 +35,28 @@ export async function GET(req: Request) {
     .limit(1);
   if (!owner) {
     return NextResponse.json({ error: "owner not found" }, { status: 404 });
+  }
+
+  // --- temporary per-step timing diagnostic ---
+  const step = new URL(req.url).searchParams.get("step");
+  if (step) {
+    const t = Date.now();
+    let info: unknown = null;
+    try {
+      if (step === "dedupe") info = await runDedupe(owner.id);
+      else if (step === "enrich") info = await enrichAndPromote(owner.id, { relink: false });
+      else if (step === "relink") info = await relinkAfterMerge(owner.id);
+      else if (step === "count") {
+        const [r] = await db.execute(sql`SELECT
+          (SELECT count(*) FROM emails) AS total_emails,
+          (SELECT count(*) FROM emails WHERE contact_id IS NULL) AS unlinked,
+          (SELECT count(*) FROM message_threads WHERE contact_id IS NULL) AS dangling_msg_threads`);
+        info = r;
+      }
+      return NextResponse.json({ step, ms: Date.now() - t, info });
+    } catch (e) {
+      return NextResponse.json({ step, ms: Date.now() - t, error: (e as Error).message }, { status: 500 });
+    }
   }
 
   const deadline = Date.now() + 30_000; // only start a pass with headroom for a full ~25s pass under 60s
