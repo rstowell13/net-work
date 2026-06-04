@@ -2,13 +2,14 @@
  * Full-width top bar.
  *
  * Desktop: brand · search · theme + help.
- * Mobile: brand · spacer · settings icon (search & help hidden — search
- * is reachable via the Contacts page, settings has no other entry point
- * once IconNav is hidden).
+ * Mobile: brand · spacer · search icon · settings icon (search opens a
+ * full-screen overlay; settings has no other entry point once IconNav is
+ * hidden).
  *
  * Lifted from 02-design/mockups/home/chosen.html.
  */
 import Link from "next/link";
+import { GlobalSearch } from "./GlobalSearch";
 
 export function TopBar() {
   return (
@@ -27,41 +28,10 @@ export function TopBar() {
         net-work
       </div>
 
-      {/* Search — desktop only */}
-      <div
-        className="hidden w-full items-center gap-2 rounded-[10px] border px-4 py-[9px] md:flex"
-        style={{
-          background: "var(--stone-raised)",
-          borderColor: "var(--rule)",
-        }}
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          className="h-4 w-4 shrink-0"
-          style={{ color: "var(--ink-faint)" }}
-        >
-          <circle cx="11" cy="11" r="7" />
-          <path d="m20 20-3-3" />
-        </svg>
-        <input
-          placeholder="Search contacts, tags, or notes"
-          className="flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-[color:var(--ink-faint)]"
-          style={{ color: "var(--ink)" }}
-        />
-        <span
-          className="rounded px-1.5 py-px font-mono text-[10.5px]"
-          style={{
-            background: "var(--stone-sunken)",
-            color: "var(--ink-muted)",
-          }}
-        >
-          /
-        </span>
-      </div>
+      {/* Search — desktop inline bar (live dropdown + Enter → /search) */}
+      <GlobalSearch variant="bar" />
 
-      {/* Push right group on mobile (no search) */}
+      {/* Push the right group to the edge on mobile (bar is desktop-only) */}
       <div className="ml-auto md:ml-0" />
 
       <div className="flex items-center gap-1.5">
@@ -83,6 +53,8 @@ export function TopBar() {
         >
           ?
         </button>
+        {/* Search — mobile only (opens a full-screen overlay) */}
+        <GlobalSearch variant="trigger" />
         {/* Settings — mobile only (desktop reaches it via IconNav) */}
         <Link
           href="/settings"
