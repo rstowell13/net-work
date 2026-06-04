@@ -21,5 +21,7 @@ CREATE INDEX IF NOT EXISTS "emails_fts_idx" ON "emails" USING gin (to_tsvector('
 CREATE INDEX IF NOT EXISTS "messages_body_fts_idx" ON "messages" USING gin (to_tsvector('english', coalesce("body", '')));--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "email_threads_summary_fts_idx" ON "email_threads" USING gin (to_tsvector('english', coalesce("summary", '')));--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "message_threads_summary_fts_idx" ON "message_threads" USING gin (to_tsvector('english', coalesce("summary", '')));--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "relationship_summaries_body_fts_idx" ON "relationship_summaries" USING gin (to_tsvector('english', coalesce("body", '')));--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "calendar_events_fts_idx" ON "calendar_events" USING gin (to_tsvector('english', coalesce("title", '') || ' ' || coalesce(array_to_string("attendees", ' '), '')));
+CREATE INDEX IF NOT EXISTS "relationship_summaries_body_fts_idx" ON "relationship_summaries" USING gin (to_tsvector('english', coalesce("body", '')));
+-- calendar_events is intentionally not indexed: its mention query mixes in
+-- array_to_string(attendees), which is STABLE (not IMMUTABLE) and so can't go in
+-- an index expression. The table is small enough that a sequential scan is fine.
