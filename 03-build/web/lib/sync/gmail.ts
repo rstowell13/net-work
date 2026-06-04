@@ -241,7 +241,13 @@ export async function syncGmail(sourceId: string) {
             counters.recordsUpdated += 1;
           }
 
-          // Per-message inserts
+          // Collect this thread's rows, then batch-upsert: ONE insert for all
+          // emails and ONE for all gmail-derived contacts, instead of a DB
+          // round-trip per message and per address. A long thread (hundreds of
+          // messages) otherwise meant thousands of sequential writes that could
+          // blow the serverless time limit.
+          const emailRows: (typeof emails.$inferInsert)[] = [];
+          const rawByAddr = new Map<string, typeof rawContacts.$inferInsert>();
           for (const m of msgs) {
             const headers = (m.payload?.headers ?? []) as {
               name?: string | null;
@@ -278,47 +284,26 @@ export async function syncGmail(sourceId: string) {
             // Persist a 2KB body preview (Gmail's "snippet" field is small)
             const bodyPreview = (m.snippet ?? "").slice(0, 2048);
 
-            await db
-              .insert(emails)
-              .values({
-                threadId: thread.id,
-                externalId: m.id!,
-                direction,
-                sentAt,
-                subject,
-                body: bodyPreview,
-                fromEmail,
-                toEmails,
-                ccEmails,
-              })
-              .onConflictDoUpdate({
-                target: emails.externalId,
-                set: {
-                  threadId: thread.id,
-                  direction,
-                  sentAt,
-                  subject,
-                  body: bodyPreview,
-                  fromEmail,
-                  toEmails,
-                  ccEmails,
-                },
-              });
-
-            // Create RawContact rows for any new email addresses we
-            // haven't already seen on this gmail source.
-            const seenAddrs = [
+            emailRows.push({
+              threadId: thread.id,
+              externalId: m.id!,
+              direction,
+              sentAt,
+              subject,
+              body: bodyPreview,
               fromEmail,
-              ...toEmails,
-              ...ccEmails,
-            ].filter(
+              toEmails,
+              ccEmails,
+            });
+
+            const seenAddrs = [fromEmail, ...toEmails, ...ccEmails].filter(
               (e): e is string => !!e && e !== selfEmail,
             );
             for (const addr of seenAddrs) {
               const addrName = nameByAddr.get(addr) ?? null;
-              await db
-                .insert(rawContacts)
-                .values({
+              const existing = rawByAddr.get(addr);
+              if (!existing) {
+                rawByAddr.set(addr, {
                   sourceId,
                   externalId: addr, // email is the external id for gmail-derived raw contacts
                   payload: { source: "gmail", email: addr, name: addrName } as Record<
@@ -330,17 +315,45 @@ export async function syncGmail(sourceId: string) {
                   phones: [],
                   linkedinUrl: null,
                   avatarUrl: null,
-                })
-                // Backfill the name once we learn it; never clobber an existing
-                // name with null on a later nameless occurrence of this address.
-                .onConflictDoUpdate({
-                  target: [rawContacts.sourceId, rawContacts.externalId],
-                  set: {
-                    name: sql`coalesce(${rawContacts.name}, excluded.name)`,
-                    updatedAt: new Date(),
-                  },
                 });
+              } else if (!existing.name && addrName) {
+                existing.name = addrName;
+                existing.payload = { source: "gmail", email: addr, name: addrName };
+              }
             }
+          }
+
+          // Batch upsert all of this thread's emails in one statement.
+          if (emailRows.length > 0) {
+            await db
+              .insert(emails)
+              .values(emailRows)
+              .onConflictDoUpdate({
+                target: emails.externalId,
+                set: {
+                  threadId: sql`excluded.thread_id`,
+                  direction: sql`excluded.direction`,
+                  sentAt: sql`excluded.sent_at`,
+                  subject: sql`excluded.subject`,
+                  body: sql`excluded.body`,
+                  fromEmail: sql`excluded.from_email`,
+                  toEmails: sql`excluded.to_emails`,
+                  ccEmails: sql`excluded.cc_emails`,
+                },
+              });
+          }
+          // Batch upsert all gmail-derived contacts; keep an existing name.
+          if (rawByAddr.size > 0) {
+            await db
+              .insert(rawContacts)
+              .values([...rawByAddr.values()])
+              .onConflictDoUpdate({
+                target: [rawContacts.sourceId, rawContacts.externalId],
+                set: {
+                  name: sql`coalesce(${rawContacts.name}, excluded.name)`,
+                  updatedAt: new Date(),
+                },
+              });
           }
           } catch (e) {
             // Don't fail the whole sync on one bad thread.
