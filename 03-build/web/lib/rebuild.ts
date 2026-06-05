@@ -106,20 +106,26 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
     .filter((r) => r.kind === "gmail" && r.status !== "needs_reauth")
     .sort((a, b) => newestUnix(a.config) - newestUnix(b.config));
   for (const g of gmailRows) {
-    let seen = 0;
+    let newThreads = 0;
+    let seenThreads = 0;
     try {
       const r = await syncGmail(g.id);
-      seen = r.recordsSeen;
+      newThreads = r.recordsNew;
+      seenThreads = r.recordsSeen;
     } catch (e) {
       console.error("rebuild: incremental gmail failed", g.id, e);
       continue;
     }
-    if (seen > 0) {
+    // Gate on *new* threads, not threads seen: Gmail's `after:` has day
+    // granularity, so a caught-up account keeps re-returning today's mail
+    // (recordsSeen > 0). Gating on that loops on syncing forever and never
+    // reaches merge/finalize. recordsNew goes to 0 once caught up.
+    if (newThreads > 0) {
       return {
         phase: "syncing",
         done: false,
         detail: `Fetching new mail · ${g.accountEmail || "account"}`,
-        syncedThreads: seen,
+        syncedThreads: seenThreads,
       };
     }
   }
