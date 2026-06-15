@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { asc, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
+import { normalizeHandle } from "@/lib/handles";
 
 export const runtime = "nodejs";
 
@@ -9,7 +10,7 @@ export async function GET(
   _req: Request,
   context: { params: Promise<{ kind: string; id: string }> },
 ) {
-  await requireUser();
+  const user = await requireUser();
   const { kind, id } = await context.params;
 
   if (kind === "message") {
@@ -27,14 +28,59 @@ export async function GET(
         sentAt: schema.messages.sentAt,
         body: schema.messages.body,
         channel: schema.messages.channel,
+        senderHandle: schema.messages.senderHandle,
       })
       .from(schema.messages)
       .where(eq(schema.messages.threadId, id))
       .orderBy(asc(schema.messages.sentAt));
+
+    // Group threads: label each inbound message with its sender's contact name
+    // (falling back to the raw handle). Resolution only runs for group threads.
+    let nameByHandle: Map<string, string> | null = null;
+    if (thread.isGroup) {
+      const rawRows = await db
+        .select({
+          emails: schema.rawContacts.emails,
+          phones: schema.rawContacts.phones,
+          displayName: schema.contacts.displayName,
+        })
+        .from(schema.rawContacts)
+        .innerJoin(
+          schema.contacts,
+          eq(schema.contacts.id, schema.rawContacts.contactId),
+        )
+        .where(eq(schema.contacts.userId, user.id));
+      nameByHandle = new Map<string, string>();
+      for (const r of rawRows) {
+        if (!r.displayName) continue;
+        for (const h of [...(r.emails ?? []), ...(r.phones ?? [])]) {
+          const n = normalizeHandle(h);
+          if (n && !nameByHandle.has(n)) nameByHandle.set(n, r.displayName);
+        }
+      }
+    }
+
+    const out = msgs.map((m) => {
+      const n = m.senderHandle ? normalizeHandle(m.senderHandle) : null;
+      const sender = m.senderHandle
+        ? (n && nameByHandle?.get(n)) || m.senderHandle
+        : null;
+      return {
+        id: m.id,
+        direction: m.direction,
+        sentAt: m.sentAt,
+        body: m.body,
+        channel: m.channel,
+        sender,
+      };
+    });
+
     return NextResponse.json({
       kind: "message",
-      messages: msgs,
+      messages: out,
       summary: thread.summary,
+      isGroup: thread.isGroup,
+      groupDisplayName: thread.groupDisplayName,
     });
   }
 

@@ -22,6 +22,7 @@ import {
 import { validateAgentToken } from "@/lib/agent-token";
 import { runImport } from "@/lib/sync/run";
 import { relinkAfterMerge } from "@/lib/relink";
+import { normalizeHandle } from "@/lib/handles";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -46,15 +47,21 @@ type IMessageRow = {
   sent_at_ms: number;
   direction: "inbound" | "outbound";
   channel: "imessage" | "sms";
+  is_group?: boolean;
+  sender_handle?: string | null;
 };
 
 type IMessageThread = {
   external_thread_id: string;
-  handle: string;
+  handle: string | null;
   started_at_ms: number;
   ended_at_ms: number;
   message_count: number;
   message_external_ids: string[];
+  is_group?: boolean;
+  group_chat_id?: string | null;
+  group_display_name?: string | null;
+  participant_handles?: string[];
 };
 
 type CallRow = {
@@ -238,7 +245,21 @@ async function ingestMessages(
   for (const t of threadMap.values()) {
     const startedAt = new Date(t.started_at_ms);
     const endedAt = new Date(t.ended_at_ms);
-    const handle = t.handle ?? null;
+    const isGroup = t.is_group ?? false;
+    // Group threads have no single handle — they match contacts at read time via
+    // the normalized participant roster (see lib/diary.ts).
+    const handle = isGroup ? null : t.handle ?? null;
+    const groupChatId = isGroup ? t.group_chat_id ?? null : null;
+    const groupDisplayName = isGroup ? t.group_display_name ?? null : null;
+    const participantHandles = isGroup
+      ? Array.from(
+          new Set(
+            (t.participant_handles ?? [])
+              .map(normalizeHandle)
+              .filter((h): h is string => h !== null),
+          ),
+        )
+      : null;
     const inserted = await db
       .insert(messageThreads)
       .values({
@@ -247,6 +268,10 @@ async function ingestMessages(
         startedAt,
         endedAt,
         messageCount: t.message_count,
+        isGroup,
+        groupChatId,
+        groupDisplayName,
+        participantHandles,
       })
       .onConflictDoUpdate({
         target: messageThreads.externalThreadId,
@@ -255,6 +280,10 @@ async function ingestMessages(
           startedAt,
           endedAt,
           messageCount: t.message_count,
+          isGroup,
+          groupChatId,
+          groupDisplayName,
+          participantHandles,
           updatedAt: new Date(),
         },
       })
@@ -283,6 +312,8 @@ async function ingestMessages(
         sentAt: new Date(m.sent_at_ms),
         body: m.body.slice(0, 8192),
         channel: m.channel,
+        isGroup: m.is_group ?? false,
+        senderHandle: m.sender_handle ?? null,
       })
       .onConflictDoUpdate({
         target: messages.externalId,
@@ -292,6 +323,8 @@ async function ingestMessages(
           sentAt: new Date(m.sent_at_ms),
           body: m.body.slice(0, 8192),
           channel: m.channel,
+          isGroup: m.is_group ?? false,
+          senderHandle: m.sender_handle ?? null,
         },
       });
   }

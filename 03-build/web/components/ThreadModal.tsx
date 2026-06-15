@@ -7,6 +7,8 @@ type MsgRow = {
   sentAt: string;
   body: string | null;
   channel?: "imessage" | "sms";
+  // Sender name/handle for inbound group-thread messages (null otherwise).
+  sender?: string | null;
 };
 
 type EmailRow = {
@@ -283,13 +285,18 @@ function MessageBubbles({ messages }: { messages: MsgRow[] }) {
         const sameSenderAsNext =
           next &&
           next.direction === m.direction &&
+          next.sender === m.sender &&
           new Date(next.sentAt).getTime() - new Date(m.sentAt).getTime() <
             2 * 60 * 1000;
         const sameSenderAsPrev =
           prev &&
           prev.direction === m.direction &&
+          prev.sender === m.sender &&
           new Date(m.sentAt).getTime() - new Date(prev.sentAt).getTime() <
             2 * 60 * 1000;
+        // Group threads: show the sender's name above the start of each of their
+        // runs of inbound messages.
+        const showSender = !out && !!m.sender && !sameSenderAsPrev;
 
         const radius = out
           ? `16px ${sameSenderAsPrev ? "4px" : "16px"} ${
@@ -340,10 +347,24 @@ function MessageBubbles({ messages }: { messages: MsgRow[] }) {
             <div
               style={{
                 display: "flex",
-                justifyContent: out ? "flex-end" : "flex-start",
+                flexDirection: "column",
+                alignItems: out ? "flex-end" : "flex-start",
                 marginBottom: sameSenderAsNext ? 2 : 8,
               }}
             >
+              {showSender && (
+                <span
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 600,
+                    color: "var(--ink-faint)",
+                    margin: "0 0 2px 6px",
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  {m.sender}
+                </span>
+              )}
               <div
                 style={{
                   maxWidth: "78%",

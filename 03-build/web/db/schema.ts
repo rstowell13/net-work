@@ -467,9 +467,19 @@ export const messageThreads = pgTable(
       onDelete: "set null",
     }),
     // Phone or email handle from the mac_agent — matches raw_contacts.phones/emails
-    // for post-merge relinking. Populated at ingest time.
+    // for post-merge relinking. Populated at ingest time. NULL for group threads
+    // (they have many participants — see participantHandles instead).
     handle: text("handle"),
     externalThreadId: text("external_thread_id"),
+    // Group-chat support. is_group threads are keyed on the macOS chat id (not a
+    // single handle); they stay contact_id NULL and are matched to contacts at
+    // read time via participantHandles overlap (see lib/diary.ts).
+    isGroup: boolean("is_group").notNull().default(false),
+    groupChatId: text("group_chat_id"),
+    groupDisplayName: text("group_display_name"),
+    // Normalized participant handles (last-10 phone / lowercased email) so a
+    // group thread can surface on every participant contact's page.
+    participantHandles: text("participant_handles").array(),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     endedAt: timestamp("ended_at", { withTimezone: true }).notNull(),
     messageCount: integer("message_count").notNull().default(0),
@@ -494,6 +504,17 @@ export const messageThreads = pgTable(
       t.externalThreadId,
     ),
     handleIdx: index("message_threads_handle_idx").on(t.handle),
+    // Default diary query filters contact + is_group, ordered by ended_at.
+    contactGroupEndedIdx: index("message_threads_contact_group_ended_idx").on(
+      t.contactId,
+      t.isGroup,
+      t.endedAt,
+    ),
+    // Group threads are matched to contacts by participant-handle overlap.
+    participantsIdx: index("message_threads_participants_idx").using(
+      "gin",
+      t.participantHandles,
+    ),
   }),
 );
 
@@ -512,6 +533,12 @@ export const messages = pgTable(
     sentAt: timestamp("sent_at", { withTimezone: true }).notNull(),
     body: text("body"),
     channel: messageChannelEnum("channel").notNull(),
+    // True when this message came from a group chat (kept out of the 1-on-1
+    // diary by default). senderHandle is the inbound sender's handle for group
+    // messages (NULL for 1-on-1 and for the user's own outbound messages) so
+    // group threads can be labeled per sender.
+    isGroup: boolean("is_group").notNull().default(false),
+    senderHandle: text("sender_handle"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

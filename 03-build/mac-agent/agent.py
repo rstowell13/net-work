@@ -146,13 +146,15 @@ def sync_messages(pusher, rowid_floor: int) -> int:
     stats: dict = {}
     msgs = imessage.read_messages_since(rowid_floor=rowid_floor, stats=stats)
     log.info(
-        "imessage read · scanned=%d text_only=%d attributed_only=%d skipped_no_body=%d no_handle=%d recovered_handle=%d → kept=%d",
+        "imessage read · scanned=%d text_only=%d attributed_only=%d skipped_no_body=%d no_handle=%d recovered_handle=%d group_kept=%d group_chats=%d → kept=%d",
         stats.get("scanned", 0),
         stats.get("text_only", 0),
         stats.get("attributed_only", 0),
         stats.get("skipped_no_body", 0),
         stats.get("no_handle", 0),
         stats.get("recovered_handle", 0),
+        stats.get("group_kept", 0),
+        stats.get("group_chats", 0),
         len(msgs),
     )
     if not msgs:
