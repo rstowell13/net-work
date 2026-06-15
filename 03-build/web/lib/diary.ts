@@ -1,6 +1,7 @@
 import "server-only";
-import { desc, eq } from "drizzle-orm";
+import { and, arrayOverlaps, count, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
+import { normalizeHandle } from "@/lib/handles";
 
 export type DiaryChannel =
   | "imessage"
@@ -18,9 +19,51 @@ export interface DiaryEntry {
   summary: string;
   meta?: string;
   raw?: { kind: "thread" | "email" | "call" | "event" | "note"; refId: string };
+  // True for group-chat threads. Hidden from the diary by default; revealed by
+  // the contact page's "Show group texts" toggle. Always excluded from the
+  // 1-on-1 closeness/freshness signals.
+  isGroup?: boolean;
 }
 
-export async function getDiary(contactId: string): Promise<DiaryEntry[]> {
+export interface DiaryResult {
+  entries: DiaryEntry[];
+  /** Group threads this contact participates in (for the toggle label). */
+  groupThreadCount: number;
+}
+
+/**
+ * Normalized handles (last-10 phone / lowercased email) across a contact's raw
+ * records — used to match group threads by participant-roster overlap.
+ */
+async function getContactHandles(contactId: string): Promise<string[]> {
+  const raws = await db
+    .select({
+      emails: schema.rawContacts.emails,
+      phones: schema.rawContacts.phones,
+    })
+    .from(schema.rawContacts)
+    .where(eq(schema.rawContacts.contactId, contactId));
+  const set = new Set<string>();
+  for (const r of raws) {
+    for (const e of r.emails ?? []) {
+      const n = normalizeHandle(e);
+      if (n) set.add(n);
+    }
+    for (const p of r.phones ?? []) {
+      const n = normalizeHandle(p);
+      if (n) set.add(n);
+    }
+  }
+  return [...set];
+}
+
+export async function getDiary(
+  contactId: string,
+  opts?: { includeGroups?: boolean },
+): Promise<DiaryResult> {
+  const includeGroups = opts?.includeGroups ?? false;
+  const contactHandles = await getContactHandles(contactId);
+
   const [threads, emails, calls, events, notes] = await Promise.all([
     db
       .select({
@@ -31,7 +74,12 @@ export async function getDiary(contactId: string): Promise<DiaryEntry[]> {
         summary: schema.messageThreads.summary,
       })
       .from(schema.messageThreads)
-      .where(eq(schema.messageThreads.contactId, contactId))
+      .where(
+        and(
+          eq(schema.messageThreads.contactId, contactId),
+          eq(schema.messageThreads.isGroup, false),
+        ),
+      )
       .orderBy(desc(schema.messageThreads.endedAt))
       .limit(50),
     db
@@ -66,6 +114,52 @@ export async function getDiary(contactId: string): Promise<DiaryEntry[]> {
       .limit(50),
   ]);
 
+  // Group threads match a contact by participant-roster overlap (they carry no
+  // single contactId). Always count them for the toggle label; only fetch the
+  // rows when the toggle is on.
+  let groupThreadCount = 0;
+  let groupThreads: Array<{
+    id: string;
+    endedAt: Date;
+    messageCount: number;
+    summary: string | null;
+    groupDisplayName: string | null;
+  }> = [];
+  if (contactHandles.length > 0) {
+    const [{ value }] = await db
+      .select({ value: count() })
+      .from(schema.messageThreads)
+      .where(
+        and(
+          eq(schema.messageThreads.isGroup, true),
+          arrayOverlaps(schema.messageThreads.participantHandles, contactHandles),
+        ),
+      );
+    groupThreadCount = value;
+    if (includeGroups && groupThreadCount > 0) {
+      groupThreads = await db
+        .select({
+          id: schema.messageThreads.id,
+          endedAt: schema.messageThreads.endedAt,
+          messageCount: schema.messageThreads.messageCount,
+          summary: schema.messageThreads.summary,
+          groupDisplayName: schema.messageThreads.groupDisplayName,
+        })
+        .from(schema.messageThreads)
+        .where(
+          and(
+            eq(schema.messageThreads.isGroup, true),
+            arrayOverlaps(
+              schema.messageThreads.participantHandles,
+              contactHandles,
+            ),
+          ),
+        )
+        .orderBy(desc(schema.messageThreads.endedAt))
+        .limit(50);
+    }
+  }
+
   const out: DiaryEntry[] = [];
 
   for (const t of threads) {
@@ -82,6 +176,19 @@ export async function getDiary(contactId: string): Promise<DiaryEntry[]> {
       }${dur < 60 ? ` · ${dur}m` : ""}`,
       summary: t.summary ?? "",
       raw: { kind: "thread", refId: t.id },
+    });
+  }
+  for (const t of groupThreads) {
+    out.push({
+      id: `t-${t.id}`,
+      channel: "imessage",
+      when: t.endedAt,
+      title: `${t.groupDisplayName ?? "iMessage group"} · ${
+        t.messageCount
+      } message${t.messageCount === 1 ? "" : "s"}`,
+      summary: t.summary ?? "",
+      raw: { kind: "thread", refId: t.id },
+      isGroup: true,
     });
   }
   for (const t of emails) {
@@ -129,7 +236,10 @@ export async function getDiary(contactId: string): Promise<DiaryEntry[]> {
     });
   }
 
-  return out.sort((a, b) => b.when.getTime() - a.when.getTime());
+  return {
+    entries: out.sort((a, b) => b.when.getTime() - a.when.getTime()),
+    groupThreadCount,
+  };
 }
 
 export async function getRelationshipInputs(contactId: string) {
@@ -145,7 +255,12 @@ export async function getRelationshipInputs(contactId: string) {
           threadId: schema.messages.threadId,
         })
         .from(schema.messages)
-        .where(eq(schema.messages.contactId, contactId))
+        .where(
+          and(
+            eq(schema.messages.contactId, contactId),
+            eq(schema.messages.isGroup, false),
+          ),
+        )
         .orderBy(desc(schema.messages.sentAt))
         .limit(2000),
       db
@@ -192,7 +307,12 @@ export async function getRelationshipInputs(contactId: string) {
           summary: schema.messageThreads.summary,
         })
         .from(schema.messageThreads)
-        .where(eq(schema.messageThreads.contactId, contactId))
+        .where(
+          and(
+            eq(schema.messageThreads.contactId, contactId),
+            eq(schema.messageThreads.isGroup, false),
+          ),
+        )
         .orderBy(desc(schema.messageThreads.endedAt)),
       db
         .select({

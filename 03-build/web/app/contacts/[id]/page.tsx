@@ -26,11 +26,15 @@ export const maxDuration = 60;
 
 export default async function ContactDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ groups?: string }>;
 }) {
   const user = await requireUser();
   const { id } = await params;
+  const { groups } = await searchParams;
+  const includeGroups = groups === "1";
 
   const [contact] = await db
     .select()
@@ -47,7 +51,7 @@ export default async function ContactDetailPage({
 
   const [
     rawMembers,
-    diary,
+    diaryResult,
     followUps,
     relInputs,
     mergeCandidate,
@@ -68,7 +72,7 @@ export default async function ContactDetailPage({
         eq(schema.sources.id, schema.rawContacts.sourceId),
       )
       .where(eq(schema.rawContacts.contactId, id)),
-    getDiary(id),
+    getDiary(id, { includeGroups }),
     db
       .select()
       .from(schema.followUps)
@@ -90,11 +94,17 @@ export default async function ContactDetailPage({
     listTags(user.id),
   ]);
 
-  // Last seen + interactions for freshness
-  const lastSeen = diary[0]?.when ?? null;
+  const diary = diaryResult.entries;
+  const groupThreadCount = diaryResult.groupThreadCount;
+
+  // Last seen + interactions for freshness — computed from 1-on-1 entries only,
+  // so group-chat activity never inflates how close this contact looks (even
+  // when group texts are toggled into view).
+  const oneOnOne = diary.filter((d) => !d.isGroup);
+  const lastSeen = oneOnOne[0]?.when ?? null;
   // eslint-disable-next-line react-hooks/purity
   const cutoff = Date.now() - 365 * 86400_000;
-  const interactions365 = diary.filter(
+  const interactions365 = oneOnOne.filter(
     (d) => d.when.getTime() >= cutoff && d.channel !== "note",
   ).length;
   const freshness = computeFreshness({
@@ -516,6 +526,30 @@ export default async function ContactDetailPage({
                 : "no diary entries"
             }
           />
+          {(groupThreadCount > 0 || includeGroups) && (
+            <div className="mb-4">
+              <Link
+                href={
+                  includeGroups
+                    ? `/contacts/${contact.id}`
+                    : `/contacts/${contact.id}?groups=1`
+                }
+                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12.5px] font-medium transition-colors"
+                style={{
+                  background: includeGroups
+                    ? "var(--brass-soft)"
+                    : "var(--stone-raised)",
+                  color: includeGroups
+                    ? "var(--brass-deep)"
+                    : "var(--ink-muted)",
+                }}
+              >
+                {includeGroups
+                  ? "Hide group texts"
+                  : `Show group texts (${groupThreadCount})`}
+              </Link>
+            </div>
+          )}
           <RefreshThreadSummaries contactId={contact.id} />
           {diary.length === 0 ? (
             <p
@@ -540,6 +574,17 @@ export default async function ContactDetailPage({
                       className="mb-1.5 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em]"
                       style={{ color: channelColor(entry.channel) }}
                     >
+                      {entry.isGroup && (
+                        <span
+                          className="rounded px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.06em]"
+                          style={{
+                            background: "var(--ink-muted)",
+                            color: "var(--stone)",
+                          }}
+                        >
+                          Group
+                        </span>
+                      )}
                       {entry.title}
                     </span>
                     {entry.summary && (

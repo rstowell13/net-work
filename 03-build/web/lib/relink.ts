@@ -10,24 +10,12 @@
 import "server-only";
 import { and, arrayOverlaps, eq, inArray, isNull, or } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
+import { normalizePhoneHandle } from "@/lib/handles";
 
-/**
- * Phone normalization for handle matching.
- *
- * Apple iMessage / CallHistory store handles in E.164 ("+14155550142").
- * Apple Contacts stores phones however the user typed them
- * ("(415) 555-0142", "415.555.0142", "+1 415 555-0142", etc.).
- *
- * Strip everything non-digit, then keep the last 10 digits — collapses
- * US/Canada numbers across formats. Non-NANP numbers also collapse to
- * digits-only which is good enough for v1 (Robb's network is US-heavy).
- */
-function normalizePhone(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const digits = raw.replace(/\D/g, "");
-  if (digits.length === 0) return null;
-  return digits.slice(-10);
-}
+// Phone normalization for handle matching — shared with the ingest route and
+// diary so a group thread's participant roster matches contacts identically.
+// See lib/handles.ts for the rationale (last-10-digits collapse).
+const normalizePhone = normalizePhoneHandle;
 
 export interface RelinkResult {
   contactId: string;
