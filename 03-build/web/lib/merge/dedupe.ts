@@ -7,6 +7,7 @@ import { and, eq, isNull, inArray } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { normalizeRaw } from "./normalize";
 import { classify, type ConfidenceInput } from "./confidence";
+import { isRoleAddress } from "@/lib/contacts/role-address";
 
 class UnionFind {
   parent = new Map<string, string>();
@@ -92,7 +93,10 @@ export async function runDedupe(userId: string): Promise<DedupeStats> {
 
   for (const r of candidates) {
     const n = normalizeRaw(r);
-    for (const e of n.emails) indexBy("email", e, r.id, map);
+    // Don't index role / automated addresses (info@, noreply@, …) as match keys
+    // — they'd glue unrelated raws together and form junk candidates. A raw with
+    // a real identity still groups on its name / real email / phone.
+    for (const e of n.emails) if (!isRoleAddress(e)) indexBy("email", e, r.id, map);
     for (const p of n.phones) indexBy("phone", p, r.id, map);
     if (n.linkedin) indexBy("linkedin", n.linkedin, r.id, map);
     if (n.name) indexBy("name", n.name, r.id, map);

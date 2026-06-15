@@ -23,6 +23,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { normalizeName } from "./normalize";
 import { qualifiesForPromotion } from "./promote-criteria";
+import { isRoleAddress } from "@/lib/contacts/role-address";
 import { getSelfEmails, relinkContact } from "@/lib/relink";
 
 export { qualifiesForPromotion };
@@ -109,7 +110,9 @@ export async function enrichAndPromote(
 
   for (const r of candidates) {
     const email = r.emails?.[0]?.toLowerCase() ?? null;
-    if (!email || selfEmails.has(email)) {
+    if (!email || selfEmails.has(email) || isRoleAddress(email)) {
+      // Role / automated addresses (info@, support@, noreply@, …) never become
+      // contacts — see lib/contacts/role-address.ts.
       stats.skipped++;
       continue;
     }
