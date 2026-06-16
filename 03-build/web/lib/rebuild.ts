@@ -19,6 +19,7 @@ import { runDedupe } from "@/lib/merge/dedupe";
 import { bulkApply } from "@/lib/merge/apply";
 import { enrichAndPromote } from "@/lib/merge/promote";
 import { relinkAfterMerge } from "@/lib/relink";
+import { sweepUnknownContacts } from "@/lib/contacts/unknown-contacts";
 
 const GOOGLE_KINDS = ["google_contacts", "gmail", "google_calendar"] as const;
 
@@ -167,6 +168,11 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
   const promoted = await enrichAndPromote(userId, { relink: false });
   const relink = await relinkAfterMerge(userId);
 
+  // Sweep no-name "Unknown" contacts that aren't a real relationship. Runs after
+  // relink so correspondence counts are accurate; leaves raws linked so they
+  // never re-merge into a fresh "Unknown". Keeps the triage queue free of junk.
+  const unknownRemoved = await sweepUnknownContacts(userId);
+
   return {
     phase: "done",
     done: true,
@@ -176,6 +182,7 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
       contactsEnriched: promoted.attachedToExisting,
       emailThreadsLinked: relink.totals.emailThreads,
       emailsLinked: relink.totals.emails,
+      unknownRemoved,
     },
   };
 }
