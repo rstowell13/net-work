@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { FreshnessRing } from "@/components/FreshnessRing";
@@ -34,6 +34,59 @@ export function TriageCard({
   const router = useRouter();
   const [pending, start] = useTransition();
   const [showCategory, setShowCategory] = useState(false);
+
+  // Mobile swipe (touch only — desktop uses buttons/keyboard, untouched).
+  const SWIPE_THRESHOLD = 90;
+  const cardRef = useRef<HTMLElement | null>(null);
+  const [dx, setDx] = useState(0);
+  const [transitioning, setTransitioning] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const dragStart = useRef<{ x: number; y: number } | null>(null);
+  const axis = useRef<"none" | "h" | "v">("none");
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType !== "touch" || showCategory || pending || leaving) return;
+    dragStart.current = { x: e.clientX, y: e.clientY };
+    axis.current = "none";
+    setTransitioning(false);
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragStart.current) return;
+    const mx = e.clientX - dragStart.current.x;
+    const my = e.clientY - dragStart.current.y;
+    if (axis.current === "none") {
+      if (Math.abs(mx) > 10 || Math.abs(my) > 10) {
+        axis.current = Math.abs(mx) > Math.abs(my) ? "h" : "v";
+        if (axis.current === "h") e.currentTarget.setPointerCapture(e.pointerId);
+      }
+    }
+    if (axis.current === "h") setDx(mx);
+  };
+
+  const onPointerUp = () => {
+    if (!dragStart.current || axis.current !== "h") {
+      dragStart.current = null;
+      axis.current = "none";
+      return;
+    }
+    dragStart.current = null;
+    axis.current = "none";
+    setTransitioning(true);
+    if (dx <= -SWIPE_THRESHOLD) {
+      // Swipe left → skip (commits immediately, like the Skip button).
+      setLeaving(true);
+      const w = cardRef.current?.offsetWidth ?? window.innerWidth;
+      setDx(-(w + 120));
+      window.setTimeout(() => submit("skip"), 280);
+    } else if (dx >= SWIPE_THRESHOLD) {
+      // Swipe right → keep (opens category dialog, like the Keep button).
+      setDx(0);
+      setShowCategory(true);
+    } else {
+      setDx(0);
+    }
+  };
 
   const submit = (
     decision: "keep" | "skip",
@@ -116,9 +169,49 @@ export function TriageCard({
       </div>
 
       <article
-        className="mb-6 rounded-2xl border bg-[var(--stone-raised)] px-5 pb-7 pt-7 md:px-10 md:pb-8 md:pt-10"
-        style={{ borderColor: "var(--rule)" }}
+        ref={cardRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        className="relative mb-6 rounded-2xl border bg-[var(--stone-raised)] px-5 pb-7 pt-7 md:px-10 md:pb-8 md:pt-10"
+        style={{
+          borderColor: "var(--rule)",
+          transform: `translateX(${dx}px) rotate(${dx * 0.05}deg)`,
+          opacity: leaving ? 0 : 1 - Math.min(Math.abs(dx) / 1400, 0.25),
+          transition: transitioning
+            ? "transform 0.28s ease-out, opacity 0.28s ease-out"
+            : "none",
+          touchAction: "pan-y",
+          willChange: "transform",
+        }}
       >
+        {/* Swipe stamps (mobile) — fade in as the card is dragged */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute right-5 top-5 z-10 rounded-md border-2 px-2.5 py-1 text-[15px] font-bold uppercase tracking-[0.08em] md:hidden"
+          style={{
+            color: "var(--brass)",
+            borderColor: "var(--brass)",
+            transform: "rotate(12deg)",
+            opacity: dx > 0 ? Math.min(dx / SWIPE_THRESHOLD, 1) : 0,
+          }}
+        >
+          Keep
+        </span>
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-5 top-5 z-10 rounded-md border-2 px-2.5 py-1 text-[15px] font-bold uppercase tracking-[0.08em] md:hidden"
+          style={{
+            color: "var(--ink-faint)",
+            borderColor: "var(--ink-faint)",
+            transform: "rotate(-12deg)",
+            opacity: dx < 0 ? Math.min(-dx / SWIPE_THRESHOLD, 1) : 0,
+          }}
+        >
+          Skip
+        </span>
+
         {/* Mobile header: avatar + ring on row 1, name + meta on row 2 */}
         <header className="mb-6 md:hidden">
           <div className="flex items-center justify-between gap-4">
@@ -340,10 +433,16 @@ export function TriageCard({
       </article>
 
       <p
-        className="text-center text-[11.5px] tabular-nums"
+        className="hidden text-center text-[11.5px] tabular-nums md:block"
         style={{ color: "var(--ink-faint)" }}
       >
         <Kbd>←</Kbd> skip · <Kbd>→</Kbd> keep · <Kbd>esc</Kbd> close
+      </p>
+      <p
+        className="text-center text-[11.5px] md:hidden"
+        style={{ color: "var(--ink-faint)" }}
+      >
+        Swipe left to skip · swipe right to keep
       </p>
 
       {showCategory && (

@@ -32,6 +32,7 @@ export default async function TriagePage() {
           <EmptyState hiddenCount={queue.hiddenCount} />
         ) : (
           <TriageCard
+            key={next.contact.id}
             contact={{
               id: next.contact.id,
               displayName: next.contact.displayName,
