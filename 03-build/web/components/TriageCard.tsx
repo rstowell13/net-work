@@ -359,7 +359,7 @@ export function TriageCard({
                       day: "2-digit",
                     })}
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <span
                       className="mb-1 inline-flex text-[10.5px] font-semibold uppercase tracking-[0.08em]"
                       style={{ color: channelColor(r.channel) }}
@@ -367,7 +367,7 @@ export function TriageCard({
                       {channelLabel(r.channel)}
                     </span>
                     <p
-                      className="m-0 line-clamp-2 text-[13.5px] leading-[1.5]"
+                      className="m-0 line-clamp-2 break-words text-[13.5px] leading-[1.5] [overflow-wrap:anywhere]"
                       style={{ color: "var(--ink-muted)" }}
                     >
                       {r.preview}
