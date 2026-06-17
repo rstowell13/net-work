@@ -18,6 +18,7 @@ import type {
   MentionSource,
   SearchResults,
 } from "@/lib/search/queries";
+import { formatPhoneDisplay } from "@/lib/phone-format";
 
 const EMPTY: SearchResults = { contacts: [], tags: [], mentions: [] };
 
@@ -356,7 +357,9 @@ function ResultsPanel({
                 </span>
                 {(c.matchedOn === "email" || c.matchedOn === "phone") && (
                   <span className="block truncate text-[12px]" style={{ color: "var(--ink-faint)" }}>
-                    {c.matchedOn === "email" ? c.primaryEmail : c.primaryPhone}
+                    {c.matchedOn === "email"
+                      ? c.primaryEmail
+                      : formatPhoneDisplay(c.primaryPhone)}
                   </span>
                 )}
               </span>
