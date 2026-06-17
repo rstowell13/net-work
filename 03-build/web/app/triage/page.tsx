@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { TriageCard } from "@/components/TriageCard";
 import { requireUser } from "@/lib/auth";
@@ -16,10 +17,11 @@ function daysAgoLabel(d: Date | null, now: number): string {
 
 export default async function TriagePage() {
   const user = await requireUser();
-  const [next, counts] = await Promise.all([
+  const [queue, counts] = await Promise.all([
     getNextTriageContact(user.id),
     getStatusCounts(user.id),
   ]);
+  const next = queue.next;
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
 
@@ -27,7 +29,7 @@ export default async function TriagePage() {
     <AppShell active="/triage">
       <div className="mx-auto max-w-[760px] px-4 pb-24 pt-6 md:px-14 md:pb-16 md:pt-8">
         {!next ? (
-          <EmptyState />
+          <EmptyState hiddenCount={queue.hiddenCount} />
         ) : (
           <TriageCard
             contact={{
@@ -49,7 +51,7 @@ export default async function TriagePage() {
             recent={mergeRecentInteractions(next.recent)}
             progress={{
               triaged: counts.kept + counts.skipped,
-              total: counts.all,
+              total: counts.kept + counts.skipped + queue.eligibleRemaining,
             }}
           />
         )}
@@ -58,7 +60,7 @@ export default async function TriagePage() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ hiddenCount }: { hiddenCount: number }) {
   return (
     <div className="py-16">
       <h1
@@ -74,10 +76,26 @@ function EmptyState() {
       >
         All caught up.
       </h1>
-      <p className="text-[15px]" style={{ color: "var(--ink-muted)" }}>
-        Nothing left to triage. New contacts will appear here as you ingest more
-        data or merge new groups.
-      </p>
+      {hiddenCount > 0 ? (
+        <p className="text-[15px]" style={{ color: "var(--ink-muted)" }}>
+          {hiddenCount.toLocaleString()} low-signal contact
+          {hiddenCount === 1 ? " is" : "s are"} hidden by your triage filter.
+          Loosen it in{" "}
+          <Link
+            href="/settings/triage"
+            className="underline"
+            style={{ color: "var(--brass)" }}
+          >
+            Settings → Triage
+          </Link>{" "}
+          to see them.
+        </p>
+      ) : (
+        <p className="text-[15px]" style={{ color: "var(--ink-muted)" }}>
+          Nothing left to triage. New contacts will appear here as you ingest
+          more data or merge new groups.
+        </p>
+      )}
     </div>
   );
 }

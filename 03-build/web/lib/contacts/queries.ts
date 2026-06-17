@@ -3,6 +3,8 @@ import { and, eq, gte, sql, desc, inArray, isNull, isNotNull } from "drizzle-orm
 import { db, schema } from "@/lib/db";
 import { computeFreshness, type FreshnessResult } from "@/lib/scoring/freshness";
 import { aggregateTags, type Tag } from "@/lib/tags/queries";
+import { getTriageRules } from "@/lib/triage/rules";
+import { qualifiesForTriage } from "@/lib/triage/eligibility";
 
 export interface ContactListRow {
   id: string;
@@ -160,6 +162,63 @@ async function aggregateSources(
   return out;
 }
 
+async function aggregateDirectional(
+  contactIds: string[],
+): Promise<Map<string, { inbound: number; outbound: number }>> {
+  if (contactIds.length === 0) return new Map();
+  // Inbound vs outbound counts across personal channels, used to gate the
+  // triage queue on two-way engagement. Group texts are excluded (a group
+  // blast isn't a 1-on-1 exchange); missed calls are excluded (no engagement).
+  const out = new Map<string, { inbound: number; outbound: number }>();
+  const bump = (id: string | null, dir: string, n: number) => {
+    if (!id) return;
+    const cur = out.get(id) ?? { inbound: 0, outbound: 0 };
+    if (dir === "inbound") cur.inbound += n;
+    else if (dir === "outbound") cur.outbound += n;
+    out.set(id, cur);
+  };
+
+  const m = await db
+    .select({
+      id: schema.messages.contactId,
+      direction: schema.messages.direction,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(schema.messages)
+    .where(
+      and(
+        inArray(schema.messages.contactId, contactIds),
+        eq(schema.messages.isGroup, false),
+      ),
+    )
+    .groupBy(schema.messages.contactId, schema.messages.direction);
+  for (const r of m) bump(r.id, r.direction, r.n);
+
+  const e = await db
+    .select({
+      id: schema.emails.contactId,
+      direction: schema.emails.direction,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(schema.emails)
+    .where(inArray(schema.emails.contactId, contactIds))
+    .groupBy(schema.emails.contactId, schema.emails.direction);
+  for (const r of e) bump(r.id, r.direction, r.n);
+
+  const c = await db
+    .select({
+      id: schema.callLogs.contactId,
+      direction: schema.callLogs.direction,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(schema.callLogs)
+    .where(inArray(schema.callLogs.contactId, contactIds))
+    .groupBy(schema.callLogs.contactId, schema.callLogs.direction);
+  for (const r of c) bump(r.id, r.direction, r.n);
+
+  return out;
+}
+
 export async function listContacts(
   userId: string,
   filters: ContactListFilters = {},
@@ -295,9 +354,37 @@ export async function getCategoryCounts(userId: string) {
   return out;
 }
 
-export async function getNextTriageContact(userId: string) {
-  const [c] = await db
-    .select()
+export interface TriageQueueResult {
+  next: {
+    contact: typeof schema.contacts.$inferSelect;
+    lastSeenAt: Date | null;
+    freshness: FreshnessResult;
+    sources: string[];
+    recent: {
+      messages: { id: string; sentAt: Date; body: string | null }[];
+      emails: { id: string; sentAt: Date; subject: string | null }[];
+      calls: { id: string; startedAt: Date; durationSeconds: number }[];
+      calendar: { id: string; startsAt: Date; title: string }[];
+    };
+    counts: { threads: number; calls: number; emails: number };
+  } | null;
+  // Qualifying contacts still awaiting a decision, and those hidden by the
+  // strictness filter. Drive the progress bar and empty state from these.
+  eligibleRemaining: number;
+  hiddenCount: number;
+}
+
+export async function getNextTriageContact(
+  userId: string,
+): Promise<TriageQueueResult> {
+  const rules = await getTriageRules(userId);
+
+  // Whole to_triage set (ids + createdAt tie-breaker only — cheap).
+  const queue = await db
+    .select({
+      id: schema.contacts.id,
+      createdAt: schema.contacts.createdAt,
+    })
     .from(schema.contacts)
     .where(
       and(
@@ -305,19 +392,66 @@ export async function getNextTriageContact(userId: string) {
         eq(schema.contacts.triageStatus, "to_triage"),
         isNull(schema.contacts.deletedAt),
       ),
-    )
-    .orderBy(schema.contacts.createdAt)
-    .limit(1);
-  if (!c) return null;
+    );
+  if (queue.length === 0) {
+    return { next: null, eligibleRemaining: 0, hiddenCount: 0 };
+  }
 
-  const [lastSeen, sources, freq] = await Promise.all([
-    aggregateLastSeen([c.id]),
-    aggregateSources([c.id]),
-    aggregateInteractions365([c.id]),
+  const ids = queue.map((q) => q.id);
+  const [directional, lastSeenAll, freqAll] = await Promise.all([
+    aggregateDirectional(ids),
+    aggregateLastSeen(ids),
+    aggregateInteractions365(ids),
   ]);
-  const ls = lastSeen.get(c.id) ?? null;
+  const now = new Date();
+
+  // Filter to qualifying contacts, then rank by freshness (recency + volume),
+  // tie-broken by total interactions, then oldest-created first.
+  const ranked = queue
+    .map((q) => {
+      const d = directional.get(q.id) ?? { inbound: 0, outbound: 0 };
+      const ls = lastSeenAll.get(q.id) ?? null;
+      const total = d.inbound + d.outbound;
+      const eligible = qualifiesForTriage(
+        { inbound: d.inbound, outbound: d.outbound, total, lastSeenAt: ls },
+        rules,
+        now,
+      );
+      const freshness = computeFreshness(
+        { lastSeenAt: ls, interactions365: freqAll.get(q.id) ?? 0 },
+        now,
+      );
+      return { id: q.id, createdAt: q.createdAt, eligible, total, freshness };
+    })
+    .filter((r) => r.eligible);
+
+  ranked.sort((a, b) => {
+    if (b.freshness.score !== a.freshness.score) {
+      return b.freshness.score - a.freshness.score;
+    }
+    if (b.total !== a.total) return b.total - a.total;
+    return a.createdAt.getTime() - b.createdAt.getTime();
+  });
+
+  const eligibleRemaining = ranked.length;
+  const hiddenCount = queue.length - eligibleRemaining;
+  if (eligibleRemaining === 0) {
+    return { next: null, eligibleRemaining, hiddenCount };
+  }
+
+  const top = ranked[0];
+  const [c] = await db
+    .select()
+    .from(schema.contacts)
+    .where(eq(schema.contacts.id, top.id))
+    .limit(1);
+  if (!c) {
+    return { next: null, eligibleRemaining, hiddenCount };
+  }
+
+  const sources = await aggregateSources([c.id]);
+  const ls = lastSeenAll.get(c.id) ?? null;
   const src = sources.get(c.id) ?? { kinds: new Set<string>(), count: 0 };
-  const interactions = freq.get(c.id) ?? 0;
 
   // Pull a small recent history slice for the card preview.
   const [recentMsgs, recentEmails, recentCalls, recentCalendar] =
@@ -376,20 +510,21 @@ export async function getNextTriageContact(userId: string) {
   };
 
   return {
-    contact: c,
-    lastSeenAt: ls,
-    freshness: computeFreshness({
+    next: {
+      contact: c,
       lastSeenAt: ls,
-      interactions365: interactions,
-    }),
-    sources: [...src.kinds],
-    recent: {
-      messages: recentMsgs,
-      emails: recentEmails,
-      calls: recentCalls,
-      calendar: recentCalendar,
+      freshness: top.freshness,
+      sources: [...src.kinds],
+      recent: {
+        messages: recentMsgs,
+        emails: recentEmails,
+        calls: recentCalls,
+        calendar: recentCalendar,
+      },
+      counts,
     },
-    counts,
+    eligibleRemaining,
+    hiddenCount,
   };
 }
 
