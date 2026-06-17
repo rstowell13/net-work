@@ -320,7 +320,8 @@ export async function getNextTriageContact(userId: string) {
   const interactions = freq.get(c.id) ?? 0;
 
   // Pull a small recent history slice for the card preview.
-  const [recentMsgs, recentEmails, recentCalls] = await Promise.all([
+  const [recentMsgs, recentEmails, recentCalls, recentCalendar] =
+    await Promise.all([
     db
       .select({
         id: schema.messages.id,
@@ -352,6 +353,16 @@ export async function getNextTriageContact(userId: string) {
       .where(eq(schema.callLogs.contactId, c.id))
       .orderBy(desc(schema.callLogs.startedAt))
       .limit(3),
+    db
+      .select({
+        id: schema.calendarEvents.id,
+        startsAt: schema.calendarEvents.startsAt,
+        title: schema.calendarEvents.title,
+      })
+      .from(schema.calendarEvents)
+      .where(eq(schema.calendarEvents.contactId, c.id))
+      .orderBy(desc(schema.calendarEvents.startsAt))
+      .limit(3),
   ]);
 
   const counts = {
@@ -376,6 +387,7 @@ export async function getNextTriageContact(userId: string) {
       messages: recentMsgs,
       emails: recentEmails,
       calls: recentCalls,
+      calendar: recentCalendar,
     },
     counts,
   };
