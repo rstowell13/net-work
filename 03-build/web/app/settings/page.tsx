@@ -25,6 +25,11 @@ export default function SettingsPage() {
             desc="Connected accounts and the Mac agent."
           />
           <SettingsLink
+            href="/settings/triage"
+            title="Triage"
+            desc="Who shows up in your triage queue — engagement bar and recency window."
+          />
+          <SettingsLink
             href="/settings/cadence"
             title="Cadence"
             desc="Weekly target, personal/business mix, per-tag goals, min days since last contact."

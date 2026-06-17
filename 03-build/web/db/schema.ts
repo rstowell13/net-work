@@ -802,6 +802,28 @@ export const cadenceRules = pgTable("cadence_rules", {
     .defaultNow(),
 });
 
+// Per-user triage strictness — which contacts surface in the triage queue.
+// One row per user; absence means defaults (see lib/triage/rules.ts).
+export const triageRules = pgTable("triage_rules", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" })
+    .unique(),
+  // Require min(inbound, outbound) >= minTwoWay across texts/emails/calls.
+  // 0 disables the two-way requirement.
+  minTwoWay: integer("min_two_way").notNull().default(1),
+  // Require total interactions (inbound + outbound) >= minTotal. Used by the
+  // "any interaction" preset (minTwoWay=0, minTotal=1).
+  minTotal: integer("min_total").notNull().default(0),
+  // Hide contacts whose last interaction is older than this many days.
+  // NULL = no time limit.
+  maxAgeDays: integer("max_age_days"),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const tagCadenceRules = pgTable("tag_cadence_rules", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")
