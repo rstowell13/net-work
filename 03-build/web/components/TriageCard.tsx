@@ -4,25 +4,21 @@ import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { FreshnessRing } from "@/components/FreshnessRing";
 import { bandColor, bandLabel, type FreshnessResult } from "@/lib/scoring/freshness";
-
-interface RecentItem {
-  date: Date;
-  channel: "imessage" | "email" | "call";
-  preview: string;
-}
+import type { RecentChannel, RecentInteraction } from "@/lib/contacts/recent";
 
 interface Props {
   contact: {
     id: string;
     displayName: string;
     photoUrl: string | null;
+    primaryEmail: string | null;
+    primaryPhone: string | null;
   };
   freshness: FreshnessResult;
   sources: string[];
   lastSeenLabel: string;
-  metaLine: string;
-  signals: { sources: string; threads: number; calls: number; lastSeen: string };
-  recent: RecentItem[];
+  signals: { threads: number; calls: number };
+  recent: RecentInteraction[];
   progress: { triaged: number; total: number };
 }
 
@@ -31,7 +27,6 @@ export function TriageCard({
   freshness,
   sources,
   lastSeenLabel,
-  metaLine,
   signals,
   recent,
   progress,
@@ -158,12 +153,10 @@ export function TriageCard({
           >
             {contact.displayName}
           </h1>
-          <div
-            className="mt-2 text-[12px] tabular-nums"
-            style={{ color: "var(--ink-faint)" }}
-          >
-            {metaLine}
-          </div>
+          <ContactLines
+            email={contact.primaryEmail}
+            phone={contact.primaryPhone}
+          />
           <div className="mt-2.5 flex flex-wrap gap-1">
             {sources.map((s) => (
               <span
@@ -207,12 +200,10 @@ export function TriageCard({
             >
               {contact.displayName}
             </h1>
-            <div
-              className="flex flex-wrap items-center gap-2.5 text-[12.5px] tabular-nums"
-              style={{ color: "var(--ink-faint)" }}
-            >
-              <span>{metaLine}</span>
-            </div>
+            <ContactLines
+              email={contact.primaryEmail}
+              phone={contact.primaryPhone}
+            />
             <div className="mt-2.5 flex flex-wrap gap-1">
               {sources.map((s) => (
                 <span
@@ -240,11 +231,10 @@ export function TriageCard({
         </header>
 
         <div
-          className="mb-6 grid grid-cols-2 gap-y-4 border-y py-4 md:grid-cols-4 md:gap-y-0"
+          className="mb-6 grid grid-cols-3 border-y py-4"
           style={{ borderColor: "var(--rule)" }}
         >
-          <SignalCell label="Sources" value={signals.sources} />
-          <SignalCell label="Threads" value={String(signals.threads)} />
+          <SignalCell label="Texts" value={String(signals.threads)} />
           <SignalCell label="Calls" value={String(signals.calls)} />
           <SignalCell label="Last seen" value={lastSeenLabel} last />
         </div>
@@ -255,7 +245,7 @@ export function TriageCard({
               className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em]"
               style={{ color: "var(--ink-faint)" }}
             >
-              Recent history
+              Last 3 interactions
             </p>
             <div className="flex flex-col">
               {recent.map((r, i) => (
@@ -281,7 +271,7 @@ export function TriageCard({
                       className="mb-1 inline-flex text-[10.5px] font-semibold uppercase tracking-[0.08em]"
                       style={{ color: channelColor(r.channel) }}
                     >
-                      {r.channel}
+                      {channelLabel(r.channel)}
                     </span>
                     <p
                       className="m-0 line-clamp-2 text-[13.5px] leading-[1.5]"
@@ -407,7 +397,7 @@ function Kbd({ children }: { children: React.ReactNode }) {
   );
 }
 
-function channelColor(c: "imessage" | "email" | "call"): string {
+function channelColor(c: RecentChannel): string {
   switch (c) {
     case "imessage":
       return "var(--av-2)";
@@ -415,7 +405,75 @@ function channelColor(c: "imessage" | "email" | "call"): string {
       return "var(--av-9)";
     case "call":
       return "var(--av-5)";
+    case "calendar":
+      return "var(--av-5)";
   }
+}
+
+function channelLabel(c: RecentChannel): string {
+  switch (c) {
+    case "imessage":
+      return "Text";
+    case "email":
+      return "Email";
+    case "call":
+      return "Call";
+    case "calendar":
+      return "Calendar";
+  }
+}
+
+function ContactLines({
+  email,
+  phone,
+}: {
+  email: string | null;
+  phone: string | null;
+}) {
+  if (!email && !phone) return null;
+  return (
+    <div className="mt-2 flex flex-col gap-1">
+      {email && (
+        <a
+          href={`mailto:${email}`}
+          className="inline-flex items-center gap-1.5 text-[13px] hover:underline"
+          style={{ color: "var(--brass)" }}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            className="h-[14px] w-[14px] shrink-0"
+            aria-hidden
+          >
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+            <path d="m3 7 9 6 9-6" />
+          </svg>
+          <span className="break-all">{email}</span>
+        </a>
+      )}
+      {phone && (
+        <a
+          href={`tel:${phone}`}
+          className="inline-flex items-center gap-1.5 text-[13px] hover:underline"
+          style={{ color: "var(--brass)" }}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            className="h-[14px] w-[14px] shrink-0"
+            aria-hidden
+          >
+            <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L20 13l1 4v3a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1Z" />
+          </svg>
+          <span className="tabular-nums">{phone}</span>
+        </a>
+      )}
+    </div>
+  );
 }
 
 function CategoryDialog({

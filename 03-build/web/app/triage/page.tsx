@@ -2,6 +2,7 @@ import { AppShell } from "@/components/AppShell";
 import { TriageCard } from "@/components/TriageCard";
 import { requireUser } from "@/lib/auth";
 import { getNextTriageContact, getStatusCounts } from "@/lib/contacts/queries";
+import { mergeRecentInteractions } from "@/lib/contacts/recent";
 
 export const dynamic = "force-dynamic";
 
@@ -33,44 +34,19 @@ export default async function TriagePage() {
               id: next.contact.id,
               displayName: next.contact.displayName,
               photoUrl: next.contact.photoUrl,
+              primaryEmail: next.contact.primaryEmail,
+              primaryPhone: next.contact.primaryPhone,
             }}
             freshness={next.freshness}
             sources={next.sources}
             lastSeenLabel={
-              next.lastSeenAt
-                ? daysAgoLabel(next.lastSeenAt, now)
-                : "no recorded contact"
+              next.lastSeenAt ? daysAgoLabel(next.lastSeenAt, now) : "Never"
             }
-            metaLine={`${
-              next.lastSeenAt ? `last seen ${daysAgoLabel(next.lastSeenAt, now)}` : "no diary yet"
-            } · ${next.counts.threads} thread${next.counts.threads === 1 ? "" : "s"} · ${next.counts.calls} call${next.counts.calls === 1 ? "" : "s"}`}
             signals={{
-              sources: `${next.sources.length} / 6`,
               threads: next.counts.threads,
               calls: next.counts.calls,
-              lastSeen: next.lastSeenAt
-                ? `${Math.floor((now - next.lastSeenAt.getTime()) / 86400_000)}d`
-                : "—",
             }}
-            recent={[
-              ...next.recent.messages.map((m) => ({
-                date: m.sentAt,
-                channel: "imessage" as const,
-                preview: (m.body ?? "").slice(0, 200) || "(no text)",
-              })),
-              ...next.recent.emails.map((e) => ({
-                date: e.sentAt,
-                channel: "email" as const,
-                preview: e.subject ?? "(no subject)",
-              })),
-              ...next.recent.calls.map((c) => ({
-                date: c.startedAt,
-                channel: "call" as const,
-                preview: `${Math.round(c.durationSeconds / 60)}-minute call`,
-              })),
-            ]
-              .sort((a, b) => b.date.getTime() - a.date.getTime())
-              .slice(0, 3)}
+            recent={mergeRecentInteractions(next.recent)}
             progress={{
               triaged: counts.kept + counts.skipped,
               total: counts.all,
