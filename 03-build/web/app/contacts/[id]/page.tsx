@@ -20,6 +20,8 @@ import { getTagsForContact, listTags } from "@/lib/tags/queries";
 import { getDiary, getRelationshipInputs } from "@/lib/diary";
 import { getOrGenerateRelationshipSummary } from "@/lib/llm/summary";
 import { computeFreshness, bandColor, bandLabel } from "@/lib/scoring/freshness";
+import { dedupePhonesForDisplay, formatPhoneDisplay } from "@/lib/phone-format";
+import { normalizePhone } from "@/lib/merge/normalize";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -135,9 +137,13 @@ export default async function ContactDetailPage({
       rawMembers.flatMap((r) => (r.emails ?? []).map((e) => e.toLowerCase())),
     ),
   ];
-  const allPhones = [
-    ...new Set(rawMembers.flatMap((r) => r.phones ?? [])),
-  ];
+  const allPhones = dedupePhonesForDisplay(
+    rawMembers.flatMap((r) => r.phones ?? []),
+  );
+  // E.164 target for the Call/Text links — reliable regardless of stored format.
+  const primaryTel = contact.primaryPhone
+    ? normalizePhone(contact.primaryPhone) ?? contact.primaryPhone
+    : null;
   const allLinkedIn = [
     ...new Set(
       rawMembers
@@ -344,11 +350,11 @@ export default async function ContactDetailPage({
         >
           <div className="flex flex-wrap items-center gap-2">
             <AddToWeekButton contactId={contact.id} />
-            {contact.primaryPhone && (
-              <ActionLink href={`tel:${contact.primaryPhone}`}>Call</ActionLink>
+            {primaryTel && (
+              <ActionLink href={`tel:${primaryTel}`}>Call</ActionLink>
             )}
-            {contact.primaryPhone && (
-              <ActionLink href={`sms:${contact.primaryPhone}`}>Text</ActionLink>
+            {primaryTel && (
+              <ActionLink href={`sms:${primaryTel}`}>Text</ActionLink>
             )}
             {contact.primaryEmail && (
               <ActionLink href={`mailto:${contact.primaryEmail}`}>
@@ -399,13 +405,13 @@ export default async function ContactDetailPage({
                   <span style={{ color: "var(--ink-faint)" }}>—</span>
                 ) : (
                   allPhones.map((p) => (
-                    <div key={p}>
+                    <div key={p.href}>
                       <a
-                        href={`tel:${p}`}
+                        href={`tel:${p.href}`}
                         className="hover:underline"
                         style={{ color: "var(--ink)" }}
                       >
-                        {p}
+                        {p.display}
                       </a>
                     </div>
                   ))
@@ -668,7 +674,10 @@ export default async function ContactDetailPage({
                       {r.sourceKind.replace(/_/g, " ")}
                     </strong>
                     {" · "}
-                    {r.emails?.[0] ?? r.phones?.[0] ?? r.linkedinUrl ?? "—"}
+                    {r.emails?.[0] ??
+                      (r.phones?.[0] ? formatPhoneDisplay(r.phones[0]) : null) ??
+                      r.linkedinUrl ??
+                      "—"}
                     {i < rawMembers.length - 1 ? <br /> : null}
                   </div>
                 ))

@@ -8,6 +8,7 @@ import { TagChip } from "@/components/TagChip";
 import { TagPicker } from "@/components/TagPicker";
 import type { ContactListRow } from "@/lib/contacts/queries";
 import type { Tag } from "@/lib/tags/types";
+import { formatPhoneDisplay } from "@/lib/phone-format";
 
 type Cat = "personal" | "business" | "both" | null;
 
@@ -354,7 +355,11 @@ export function ContactsList({
                       className="truncate text-[12px] tabular-nums"
                       style={{ color: "var(--ink-faint)" }}
                     >
-                      {row.primaryEmail ?? row.primaryPhone ?? "—"}
+                      {row.primaryEmail ??
+                        (row.primaryPhone
+                          ? formatPhoneDisplay(row.primaryPhone)
+                          : null) ??
+                        "—"}
                     </span>
                     <div className="flex flex-wrap items-center gap-1.5">
                       {row.category ? (
@@ -508,7 +513,11 @@ export function ContactsList({
                     className="truncate text-[11.5px] tabular-nums"
                     style={{ color: "var(--ink-faint)" }}
                   >
-                    {row.primaryEmail ?? row.primaryPhone ?? "—"}
+                    {row.primaryEmail ??
+                      (row.primaryPhone
+                        ? formatPhoneDisplay(row.primaryPhone)
+                        : null) ??
+                      "—"}
                   </span>
                 </div>
                 <div>
