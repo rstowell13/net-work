@@ -121,30 +121,26 @@ export function nameKey(name: string | null | undefined): string | null {
   return [canonicalFirstToken(first), ...rest].join(" ");
 }
 
-/**
- * A looser key: first initial + surname (last token), e.g. "Joe Prezuti" and
- * "Joseph Allen Prezuti" both → "j prezuti". Used only for the look-alike
- * review tier, with bucket-size guardrails applied at the call site.
- * Returns null for single-token names or one-character surnames.
- */
-export function initialKey(name: string | null | undefined): string | null {
-  const normalized = normalizeName(name);
-  if (!normalized) return null;
-  const tokens = normalized.split(" ");
-  if (tokens.length < 2) return null;
-  const first = tokens[0];
-  const surname = tokens[tokens.length - 1];
-  if (surname.length < 2) return null;
-  return `${first[0]} ${surname}`;
-}
+// Generic / automated local-part words that look like a name when split but
+// aren't — keeps account-services@, hit-reply@, customer-care@ etc. from being
+// parsed into a pseudo-name.
+const GENERIC_EMAIL_TOKENS = new Set([
+  "reply", "noreply", "no", "donotreply", "do", "not", "hit", "auto",
+  "account", "accounts", "service", "services", "support", "team", "info",
+  "sales", "admin", "billing", "member", "members", "newsletter", "news",
+  "mail", "email", "contact", "contacts", "help", "customer", "customers",
+  "care", "notify", "notification", "notifications", "alerts", "alert",
+  "hello", "office", "dept", "department", "group", "client", "clients",
+  "orders", "order", "payments", "payment", "security", "feedback", "welcome",
+  "marketing", "update", "updates", "subscriptions", "system", "mailer",
+]);
 
 /**
  * Derive a "first last" name guess from a structured email local-part, e.g.
- * "holden.latimer@…" → "holden latimer", "h.latimer@…" → "h latimer". Returns
- * null for unstructured locals (no separator / single token) or a too-short
- * surname. Feeding this through nameKey/initialKey lets a no-name contact bridge
- * to a named one via the name embedded in their address (always review-tier).
- * Only the common "first.last" ordering is handled — not "last.first".
+ * "holden.latimer@…" → "holden latimer". Returns null for unstructured locals
+ * (no separator / single token), a too-short surname, or generic/automated
+ * tokens. Feeding this through nameKey lets a no-name contact bridge to a
+ * contact with that real name. Only the common "first.last" ordering is handled.
  */
 export function emailLocalName(email: string | null | undefined): string | null {
   if (!email) return null;
@@ -156,5 +152,8 @@ export function emailLocalName(email: string | null | undefined): string | null 
   const first = tokens[0];
   const surname = tokens[tokens.length - 1];
   if (surname.length < 3) return null;
+  if (GENERIC_EMAIL_TOKENS.has(first) || GENERIC_EMAIL_TOKENS.has(surname)) {
+    return null;
+  }
   return `${first} ${surname}`;
 }

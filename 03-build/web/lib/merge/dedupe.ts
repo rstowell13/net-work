@@ -8,7 +8,7 @@
  * time (see apply.ts). Idempotent.
  */
 import "server-only";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { getSelfEmails } from "@/lib/relink";
 import { groupDuplicates } from "./grouping";
@@ -40,22 +40,29 @@ export async function runDedupe(userId: string): Promise<DedupeStats> {
     )
     .where(eq(schema.sources.userId, userId));
 
-  // Skip raws already locked into a pending or approved candidate.
-  const existingPending = await db
-    .select({
-      id: schema.mergeCandidates.id,
-      rawContactIds: schema.mergeCandidates.rawContactIds,
-      status: schema.mergeCandidates.status,
-    })
+  // Clear stale pending suggestions so each scan reflects the current matching
+  // logic (a re-scan refreshes the queue). Approved candidates stay — their raws
+  // are already merged and must remain locked.
+  await db
+    .delete(schema.mergeCandidates)
+    .where(
+      and(
+        eq(schema.mergeCandidates.userId, userId),
+        eq(schema.mergeCandidates.status, "pending"),
+      ),
+    );
+
+  const approved = await db
+    .select({ rawContactIds: schema.mergeCandidates.rawContactIds })
     .from(schema.mergeCandidates)
     .where(
       and(
         eq(schema.mergeCandidates.userId, userId),
-        inArray(schema.mergeCandidates.status, ["pending", "approved"]),
+        eq(schema.mergeCandidates.status, "approved"),
       ),
     );
   const lockedRawIds = new Set<string>();
-  for (const c of existingPending) {
+  for (const c of approved) {
     for (const rid of c.rawContactIds) lockedRawIds.add(rid);
   }
 
