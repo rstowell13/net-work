@@ -42,9 +42,13 @@ export async function runDedupe(userId: string): Promise<DedupeStats> {
 
   // Clear stale PENDING suggestions so each scan reflects the current matching
   // logic (a re-scan refreshes the queue). Resolved candidates are preserved:
-  //  - approved → their raws are already merged and stay locked out of scanning;
-  //  - split / skipped → the user reviewed that exact group and said "not the
-  //    same", so we never re-create it (this is what makes a split stick).
+  //  - approved → the merge already happened; the "one contact's own records"
+  //    guardrail in groupDuplicates keeps it from being re-suggested. Their raws
+  //    are deliberately NOT locked out of scanning — a merged contact must stay
+  //    comparable to OTHER contacts, which is how cross-contact nickname dupes
+  //    (Bob ↔ Robert Duncan) and absorbing new records into a saved contact work.
+  //  - split / skipped → the user said "not the same"; we never re-create that
+  //    exact group.
   await db
     .delete(schema.mergeCandidates)
     .where(
@@ -54,43 +58,31 @@ export async function runDedupe(userId: string): Promise<DedupeStats> {
       ),
     );
 
-  const resolved = await db
-    .select({
-      rawContactIds: schema.mergeCandidates.rawContactIds,
-      status: schema.mergeCandidates.status,
-    })
+  const reviewed = await db
+    .select({ rawContactIds: schema.mergeCandidates.rawContactIds })
     .from(schema.mergeCandidates)
     .where(
       and(
         eq(schema.mergeCandidates.userId, userId),
-        inArray(schema.mergeCandidates.status, ["approved", "split", "skipped"]),
+        inArray(schema.mergeCandidates.status, ["split", "skipped"]),
       ),
     );
-  const lockedRawIds = new Set<string>();
   const suppressedKeys = new Set<string>();
-  for (const c of resolved) {
-    if (c.status === "approved") {
-      for (const rid of c.rawContactIds) lockedRawIds.add(rid);
-    } else {
-      suppressedKeys.add(groupKey(c.rawContactIds));
-    }
-  }
-
-  const candidates = raws.filter((r) => !lockedRawIds.has(r.id));
+  for (const c of reviewed) suppressedKeys.add(groupKey(c.rawContactIds));
 
   // The user's own addresses must never be a match key — the user's email is in
   // the From/To of nearly every message, so indexing it would glue the user's
-  // own (now-included) saved contact onto huge swaths of the address book.
+  // own saved contact onto huge swaths of the address book.
   const selfEmails = await getSelfEmails(userId);
 
-  const groups = groupDuplicates(candidates, selfEmails, suppressedKeys);
+  const groups = groupDuplicates(raws, selfEmails, suppressedKeys);
 
   const stats: DedupeStats = {
     candidatesCreated: groups.length,
     exact: 0,
     high: 0,
     ambiguous: 0,
-    rawConsidered: candidates.length,
+    rawConsidered: raws.length,
   };
   for (const g of groups) stats[g.confidence]++;
 
