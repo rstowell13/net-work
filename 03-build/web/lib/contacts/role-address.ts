@@ -28,6 +28,9 @@ const ROLE_LOCAL_PARTS = new Set<string>([
   "billing",
   "accounts",
   "accounting",
+  "ap",
+  "ar",
+  "collections",
   "admin",
   "administrator",
   "office",
@@ -88,6 +91,21 @@ const ROLE_LOCAL_PREFIXES = [
   "bounces",
 ];
 
+/**
+ * No-reply variants matched ANYWHERE in the local-part — big senders bury them
+ * mid-string (`apps-noreply@google.com`, `ogb-noreply@anthem.com`,
+ * `workspace-noreply@google.com`). Very low false-positive risk: a real person's
+ * address essentially never contains "noreply".
+ */
+const ROLE_LOCAL_CONTAINS = [
+  "noreply",
+  "no-reply",
+  "no_reply",
+  "donotreply",
+  "do-not-reply",
+  "do_not_reply",
+];
+
 export function isRoleAddress(email: string | null | undefined): boolean {
   if (!email) return false;
   const at = email.indexOf("@");
@@ -96,5 +114,6 @@ export function isRoleAddress(email: string | null | undefined): boolean {
   const local = email.slice(0, at).trim().toLowerCase().split("+")[0];
   if (!local) return false;
   if (ROLE_LOCAL_PARTS.has(local)) return true;
-  return ROLE_LOCAL_PREFIXES.some((p) => local.startsWith(p));
+  if (ROLE_LOCAL_PREFIXES.some((p) => local.startsWith(p))) return true;
+  return ROLE_LOCAL_CONTAINS.some((s) => local.includes(s));
 }

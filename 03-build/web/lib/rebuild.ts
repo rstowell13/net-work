@@ -20,6 +20,7 @@ import { bulkApply } from "@/lib/merge/apply";
 import { enrichAndPromote } from "@/lib/merge/promote";
 import { relinkAfterMerge } from "@/lib/relink";
 import { sweepUnknownContacts } from "@/lib/contacts/unknown-contacts";
+import { sweepBusinessContacts } from "@/lib/contacts/business-contacts";
 
 const GOOGLE_KINDS = ["google_contacts", "gmail", "google_calendar"] as const;
 
@@ -172,6 +173,9 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
   // relink so correspondence counts are accurate; leaves raws linked so they
   // never re-merge into a fresh "Unknown". Keeps the triage queue free of junk.
   const unknownRemoved = await sweepUnknownContacts(userId);
+  // Same idea for business / department names (Collections Dept, Accounts
+  // Payable, …) — see lib/contacts/business-name.ts.
+  const businessRemoved = await sweepBusinessContacts(userId);
 
   return {
     phase: "done",
@@ -183,6 +187,7 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
       emailThreadsLinked: relink.totals.emailThreads,
       emailsLinked: relink.totals.emails,
       unknownRemoved,
+      businessRemoved,
     },
   };
 }
