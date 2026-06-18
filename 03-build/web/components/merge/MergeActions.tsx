@@ -45,31 +45,49 @@ export function BulkMergeButton({
   const [msg, setMsg] = useState<string | null>(null);
 
   if (count === 0) return null;
+
+  // Merge in small batches so a large queue can't blow the serverless timeout,
+  // then relink the diary once at the end (the server skips per-merge relink).
+  const CHUNK = 20;
+  async function run() {
+    setMsg("Merging…");
+    let applied = 0;
+    let failed = 0;
+    for (let i = 0; i < candidateIds.length; i += CHUNK) {
+      const batch = candidateIds.slice(i, i + CHUNK);
+      const r = await fetch("/api/merge/bulk", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ candidateIds: batch }),
+      });
+      if (!r.ok) {
+        setMsg(`Stopped after ${applied} merged — error: ${await r.text()}`);
+        router.refresh();
+        return;
+      }
+      const j = await r.json();
+      applied += j.applied ?? 0;
+      failed += j.failed ?? 0;
+      setMsg(`Merged ${applied} / ${candidateIds.length}…`);
+    }
+    // One global diary relink (best-effort — merges are already saved).
+    setMsg(`Merged ${applied}. Linking history…`);
+    try {
+      await fetch("/api/merge/relink", { method: "POST" });
+    } catch {
+      /* relink is idempotent and re-runnable; don't fail the merge over it */
+    }
+    setMsg(`Merged ${applied}${failed ? ` · ${failed} failed` : ""}`);
+    router.refresh();
+  }
+
   return (
     <div className="flex items-center gap-3">
       {msg && <span className="text-xs text-[var(--ink-faint)]">{msg}</span>}
       <button
         className="rounded-lg border-0 bg-[var(--brass)] px-[18px] py-[10px] text-[13.5px] font-semibold text-[var(--ink)] disabled:opacity-60"
         disabled={pending}
-        onClick={() =>
-          start(async () => {
-            setMsg(null);
-            const r = await fetch("/api/merge/bulk", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ candidateIds }),
-            });
-            if (!r.ok) {
-              setMsg("Error: " + (await r.text()));
-              return;
-            }
-            const j = await r.json();
-            setMsg(
-              `Merged ${j.applied}${j.failed ? ` · ${j.failed} failed` : ""}`,
-            );
-            router.refresh();
-          })
-        }
+        onClick={() => start(run)}
       >
         {pending ? "Merging…" : `Merge ${count} groups`}
       </button>

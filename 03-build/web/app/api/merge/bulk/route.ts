@@ -29,6 +29,9 @@ export async function POST(req: Request) {
     ids = rows.map((r) => r.id);
   }
 
-  const result = await bulkApply(user.id, ids);
+  // Skip the per-merge diary relink — it scans the diary tables on every merge
+  // and is what blows the function timeout on large batches. The client sends
+  // small chunks and calls /api/merge/relink once at the end (one global pass).
+  const result = await bulkApply(user.id, ids, { relink: false });
   return NextResponse.json({ requested: ids.length, ...result });
 }
