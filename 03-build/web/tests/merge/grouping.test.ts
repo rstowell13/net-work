@@ -71,15 +71,6 @@ describe("groupDuplicates", () => {
     expect(groups[0].confidence).toBe("ambiguous");
   });
 
-  it("also bridges an initial-style email (h.latimer@) to a named contact", () => {
-    const groups = groupDuplicates([
-      r({ id: "named", contactId: "cA", name: "Holden Latimer" }),
-      r({ id: "email", contactId: "cB", name: "Unknown", emails: ["h.latimer@corp.com"] }),
-    ]);
-    expect(groups).toHaveLength(1);
-    expect(groups[0].confidence).toBe("ambiguous");
-  });
-
   it("does not bridge an unstructured email local-part", () => {
     // "holden@" and "latimer@" are single tokens — no surname to anchor on.
     const groups = groupDuplicates([
@@ -127,24 +118,39 @@ describe("groupDuplicates", () => {
     expect(groups[0].signals.sharedNameKey).toBe("joseph prezuti");
   });
 
-  it("flags a small look-alike bucket (same initial + surname)", () => {
+  it("does NOT group different entities sharing a generic last word", () => {
+    // These previously "matched" only via the removed first-initial+surname key
+    // (a news / c card). Now they don't group at all.
     const groups = groupDuplicates([
-      r({ id: "1", name: "Aaron Smith" }),
-      r({ id: "2", name: "Adam Smith" }),
-      r({ id: "3", name: "Alan Smith" }),
-      r({ id: "4", name: "Amy Smith" }),
+      r({ id: "apple", contactId: "a", name: "Apple News", emails: ["newsdigest@insideapple.apple.com"] }),
+      r({ id: "ana", contactId: "b", name: "ANA News & Offers", emails: ["ana_news@mail.ana.co.jp"] }),
+      r({ id: "chase", contactId: "c", name: "Chase World of Hyatt Visa Card", emails: ["chasevisacard@message.card.visa.com"] }),
+      r({ id: "citi", contactId: "d", name: "Citi Strata Elite Card", emails: ["citicards@info3.citi.com"] }),
     ]);
-    expect(groups).toHaveLength(1);
-    expect(groups[0].confidence).toBe("ambiguous");
+    expect(groups).toHaveLength(0);
   });
 
-  it("discards an oversized look-alike bucket to avoid junk megagroups", () => {
+  it("does NOT glob same-initial same-surname people; surfaces only the exact pair", () => {
     const groups = groupDuplicates([
-      r({ id: "1", name: "Aaron Smith" }),
-      r({ id: "2", name: "Adam Smith" }),
-      r({ id: "3", name: "Alan Smith" }),
-      r({ id: "4", name: "Amy Smith" }),
-      r({ id: "5", name: "Ann Smith" }),
+      // Two distinct saved contacts that genuinely share an email.
+      r({ id: "claire1", contactId: "a", name: "Claire Stowell", emails: ["cstowell@byu.net"] }),
+      r({ id: "claire2", contactId: "b", name: "Claire Stowell", emails: ["cstowell@byu.net"] }),
+      // Different people who merely share the "C. Stowell" shape.
+      r({ id: "candice", contactId: "c", name: "Candice Stowell", emails: ["mikecandi@mac.com"] }),
+      r({ id: "clara", contactId: "d", name: "Clara Stowell", emails: ["clairegstowell@gmail.com"] }),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(new Set(groups[0].rawContactIds)).toEqual(
+      new Set(["claire1", "claire2"]),
+    );
+    expect(groups[0].confidence).toBe("exact");
+  });
+
+  it("does NOT group two automated emails that parse to the same pseudo-name", () => {
+    // hit-reply@ is generic; neither side is a real "Hit Reply" contact.
+    const groups = groupDuplicates([
+      r({ id: "a", contactId: "x", name: "Colby Wolford", emails: ["hit-reply@linkedin.com"] }),
+      r({ id: "b", contactId: "y", name: "Andrew Lloyd", emails: ["hit-reply@dotloop.com"] }),
     ]);
     expect(groups).toHaveLength(0);
   });

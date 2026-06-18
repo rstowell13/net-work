@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   canonicalFirstToken,
   nameKey,
-  initialKey,
   emailLocalName,
 } from "@/lib/merge/nicknames";
 
@@ -38,35 +37,15 @@ describe("nameKey", () => {
   });
 });
 
-describe("initialKey", () => {
-  it("uses first initial + surname, collapsing nicknames and middle names", () => {
-    expect(initialKey("Joe Prezuti")).toBe("j prezuti");
-    expect(initialKey("Joseph Prezuti")).toBe("j prezuti");
-    expect(initialKey("Joseph Allen Prezuti")).toBe("j prezuti");
-  });
-  it("groups same-initial look-alikes (caller routes these to review tier)", () => {
-    expect(initialKey("Jane Prezuti")).toBe(initialKey("Joe Prezuti"));
-  });
-  it("skips one-character surnames and single tokens", () => {
-    expect(initialKey("John O")).toBeNull();
-    expect(initialKey("Cher")).toBeNull();
-    expect(initialKey(null)).toBeNull();
-  });
-});
-
 describe("emailLocalName", () => {
-  it("parses first.last and f.last locals", () => {
+  it("parses a first.last local-part", () => {
     expect(emailLocalName("holden.latimer@corp.com")).toBe("holden latimer");
-    expect(emailLocalName("h.latimer@corp.com")).toBe("h latimer");
     expect(emailLocalName("HOLDEN.LATIMER@Corp.com")).toBe("holden latimer");
     expect(emailLocalName("holden_latimer@corp.com")).toBe("holden latimer");
   });
-  it("derived keys line up with a real name's keys", () => {
+  it("its key lines up with the real name's key", () => {
     expect(nameKey(emailLocalName("holden.latimer@x.com"))).toBe(
       nameKey("Holden Latimer"),
-    );
-    expect(initialKey(emailLocalName("h.latimer@x.com"))).toBe(
-      initialKey("Holden Latimer"),
     );
   });
   it("returns null for unstructured locals and short surnames", () => {
@@ -75,5 +54,11 @@ describe("emailLocalName", () => {
     expect(emailLocalName("john.li@corp.com")).toBeNull(); // surname < 3
     expect(emailLocalName("notanemail")).toBeNull();
     expect(emailLocalName(null)).toBeNull();
+  });
+  it("returns null for generic / automated local-parts", () => {
+    expect(emailLocalName("hit-reply@linkedin.com")).toBeNull();
+    expect(emailLocalName("account-services@hq.bill.com")).toBeNull();
+    expect(emailLocalName("customer.care@x.com")).toBeNull();
+    expect(emailLocalName("no-reply@x.com")).toBeNull();
   });
 });

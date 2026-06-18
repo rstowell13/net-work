@@ -2,18 +2,14 @@
  * Pure duplicate-grouping core. No DB / no server-only deps so it can be
  * unit-tested and imported anywhere. dedupe.ts wraps this with the DB I/O.
  *
- * Unions raw records on shared identifiers (email/phone/LinkedIn/name) plus
- * nickname- and look-alike name keys, then classifies each multi-record group.
+ * Unions raw records on shared identifiers (email/phone/LinkedIn/name) plus a
+ * nickname-folded name key and names parsed from structured email addresses,
+ * then classifies each multi-record group.
  */
 import { normalizeRaw } from "./normalize";
 import { classify, type ConfidenceResult } from "./confidence";
-import { nameKey, initialKey, emailLocalName } from "./nicknames";
+import { nameKey, emailLocalName } from "./nicknames";
 import { isRoleAddress } from "@/lib/contacts/role-address";
-
-// Look-alike buckets (first-initial + surname) larger than this are ignored —
-// they're almost always distinct people who happen to share an initial+surname.
-// Real duplicates also share a name/email/phone/nickname key, so they still group.
-const INITIAL_KEY_BUCKET_CAP = 4;
 
 class UnionFind {
   parent = new Map<string, string>();
@@ -51,10 +47,21 @@ export interface DedupeGroup {
 }
 
 /**
- * Union raw records into duplicate groups and classify each. Skips the user's
- * own addresses, oversized look-alike buckets, and groups that are just one
- * saved contact's own records. Downgrades name-only matches between two+ saved
- * contacts to "ambiguous" so distinct same-name people are never auto-merged.
+ * Union raw records into duplicate groups and classify each. Matching keys:
+ * exact email / phone / LinkedIn / name, plus a nickname-folded name key
+ * (Joe↔Joseph, surname kept exact). A name parsed from a structured email
+ * local-part (holden.latimer@ → "Holden Latimer") bridges a no-name record to a
+ * record carrying that REAL name — never to another email-parsed name, so
+ * no-reply@/account-services@ collisions can't glue strangers together.
+ *
+ * There is deliberately NO first-initial+surname "look-alike" matching: it keys
+ * on generic last words ("Card", "Services", "News", "Inc") and over-globs
+ * distinct same-initial people ("Jared" vs "John Anderson"), which produced far
+ * more noise than signal.
+ *
+ * Skips the user's own + role addresses and groups that are just one saved
+ * contact's own records. Two+ saved contacts stay auto/bulk-mergeable only when
+ * a real identifier is shared across them (see below).
  */
 export function groupDuplicates(
   rows: DedupeRawInput[],
@@ -71,43 +78,49 @@ export function groupDuplicates(
   ) => {
     const k = `${key}:${val}`;
     const arr = map.get(k) ?? [];
-    if (!arr.includes(id)) arr.push(id); // one id per key (a record may derive the same key twice)
+    if (!arr.includes(id)) arr.push(id);
     map.set(k, arr);
   };
   const map = new Map<string, string[]>();
 
-  // Index a "first last" name (real or email-derived) under the nickname and
-  // look-alike keys. Email-derived names land here so a no-name contact bridges
-  // to a named one via the name in their address — always in the review tier.
-  const indexName = (name: string | null, id: string) => {
-    const nk = nameKey(name);
-    if (nk) indexBy("namekey", nk, id, map);
-    const ik = initialKey(name);
-    if (ik) indexBy("initialkey", ik, id, map);
-  };
+  // Owners of each REAL nickname key (from a contact's actual name). An
+  // email-parsed name bridges to these, but two email-parsed names never glue to
+  // each other.
+  const realNameKeyOwners = new Map<string, string[]>();
+  const emailNameKeys: Array<{ id: string; key: string }> = [];
 
   for (const r of rows) {
     const n = normalizeRaw(r);
-    // Don't index role / automated (info@, noreply@, …) or the user's own
-    // addresses as match keys — they'd glue unrelated raws together.
     for (const e of n.emails) {
       if (isRoleAddress(e) || selfEmails.has(e)) continue;
       indexBy("email", e, r.id, map);
-      // Bridge on a name embedded in the address (holden.latimer@ → Holden Latimer).
-      indexName(emailLocalName(e), r.id);
+      const ek = nameKey(emailLocalName(e));
+      if (ek) emailNameKeys.push({ id: r.id, key: ek });
     }
     for (const p of n.phones) indexBy("phone", p, r.id, map);
     if (n.linkedin) indexBy("linkedin", n.linkedin, r.id, map);
-    if (n.name) indexBy("name", n.name, r.id, map);
-    // Nickname-folded name key bridges "Joe Prezuti" ↔ "Joseph Prezuti".
-    indexName(n.name, r.id);
+    if (n.name) {
+      indexBy("name", n.name, r.id, map);
+      // Nickname-folded name key bridges "Joe Smith" ↔ "Joseph Smith".
+      const nk = nameKey(n.name);
+      if (nk) {
+        indexBy("namekey", nk, r.id, map);
+        const arr = realNameKeyOwners.get(nk) ?? [];
+        if (!arr.includes(r.id)) arr.push(r.id);
+        realNameKeyOwners.set(nk, arr);
+      }
+    }
   }
 
-  for (const [key, ids] of map.entries()) {
-    if (key.startsWith("initialkey:") && ids.length > INITIAL_KEY_BUCKET_CAP) {
-      continue;
-    }
+  for (const ids of map.values()) {
     for (let i = 1; i < ids.length; i++) uf.union(ids[0], ids[i]);
+  }
+
+  // Bridge each email-parsed name only to records that carry it as a real name.
+  for (const { id, key } of emailNameKeys) {
+    const owners = realNameKeyOwners.get(key);
+    if (!owners) continue;
+    for (const o of owners) if (o !== id) uf.union(id, o);
   }
 
   const groups = new Map<string, string[]>();
