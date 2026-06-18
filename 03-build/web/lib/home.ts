@@ -50,7 +50,13 @@ export async function getHomeData(userId: string): Promise<HomeData> {
         schema.contacts,
         eq(schema.contacts.id, schema.weeklyPlanItems.contactId),
       )
-      .where(eq(schema.weeklyPlanItems.planId, plan.id))
+      .where(
+        and(
+          eq(schema.weeklyPlanItems.planId, plan.id),
+          // Never surface a plan item that points at a merged-away contact.
+          isNull(schema.contacts.deletedAt),
+        ),
+      )
       .orderBy(schema.weeklyPlanItems.createdAt);
 
     for (const r of rows) {

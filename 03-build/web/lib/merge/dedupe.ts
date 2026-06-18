@@ -1,32 +1,17 @@
 /**
- * Group unmerged RawContacts into MergeCandidate rows via union-find on
- * shared normalized identifiers. Idempotent.
+ * Run dedup over a user's raw contacts and persist MergeCandidate rows. This is
+ * the DB wrapper around the pure grouping core in grouping.ts.
+ *
+ * Includes records already attached to a saved contact (saved contacts used to
+ * be invisible to dedup), so two people saved separately can be detected as
+ * duplicates. Groups spanning saved contacts are merged into a survivor at apply
+ * time (see apply.ts). Idempotent.
  */
 import "server-only";
-import { and, eq, isNull, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
-import { normalizeRaw } from "./normalize";
-import { classify, type ConfidenceInput } from "./confidence";
-import { isRoleAddress } from "@/lib/contacts/role-address";
-
-class UnionFind {
-  parent = new Map<string, string>();
-  find(x: string): string {
-    let p = this.parent.get(x) ?? x;
-    if (p === x) return x;
-    p = this.find(p);
-    this.parent.set(x, p);
-    return p;
-  }
-  union(a: string, b: string) {
-    const ra = this.find(a);
-    const rb = this.find(b);
-    if (ra !== rb) this.parent.set(ra, rb);
-  }
-  add(x: string) {
-    if (!this.parent.has(x)) this.parent.set(x, x);
-  }
-}
+import { getSelfEmails } from "@/lib/relink";
+import { groupDuplicates } from "./grouping";
 
 export interface DedupeStats {
   candidatesCreated: number;
@@ -37,11 +22,12 @@ export interface DedupeStats {
 }
 
 export async function runDedupe(userId: string): Promise<DedupeStats> {
-  // Pull all unmerged raw contacts for this user.
+  // Pull ALL of this user's raw contacts — loose and already-saved alike.
   const raws = await db
     .select({
       id: schema.rawContacts.id,
       sourceId: schema.rawContacts.sourceId,
+      contactId: schema.rawContacts.contactId,
       name: schema.rawContacts.name,
       emails: schema.rawContacts.emails,
       phones: schema.rawContacts.phones,
@@ -52,12 +38,7 @@ export async function runDedupe(userId: string): Promise<DedupeStats> {
       schema.sources,
       eq(schema.sources.id, schema.rawContacts.sourceId),
     )
-    .where(
-      and(
-        eq(schema.sources.userId, userId),
-        isNull(schema.rawContacts.contactId),
-      ),
-    );
+    .where(eq(schema.sources.userId, userId));
 
   // Skip raws already locked into a pending or approved candidate.
   const existingPending = await db
@@ -80,66 +61,31 @@ export async function runDedupe(userId: string): Promise<DedupeStats> {
 
   const candidates = raws.filter((r) => !lockedRawIds.has(r.id));
 
-  const uf = new UnionFind();
-  candidates.forEach((r) => uf.add(r.id));
+  // The user's own addresses must never be a match key — the user's email is in
+  // the From/To of nearly every message, so indexing it would glue the user's
+  // own (now-included) saved contact onto huge swaths of the address book.
+  const selfEmails = await getSelfEmails(userId);
 
-  const indexBy = (key: string, val: string, id: string, map: Map<string, string[]>) => {
-    const k = `${key}:${val}`;
-    const arr = map.get(k) ?? [];
-    arr.push(id);
-    map.set(k, arr);
-  };
-  const map = new Map<string, string[]>();
-
-  for (const r of candidates) {
-    const n = normalizeRaw(r);
-    // Don't index role / automated addresses (info@, noreply@, …) as match keys
-    // — they'd glue unrelated raws together and form junk candidates. A raw with
-    // a real identity still groups on its name / real email / phone.
-    for (const e of n.emails) if (!isRoleAddress(e)) indexBy("email", e, r.id, map);
-    for (const p of n.phones) indexBy("phone", p, r.id, map);
-    if (n.linkedin) indexBy("linkedin", n.linkedin, r.id, map);
-    if (n.name) indexBy("name", n.name, r.id, map);
-  }
-
-  for (const ids of map.values()) {
-    for (let i = 1; i < ids.length; i++) uf.union(ids[0], ids[i]);
-  }
-
-  const groups = new Map<string, string[]>();
-  for (const r of candidates) {
-    const root = uf.find(r.id);
-    const g = groups.get(root) ?? [];
-    g.push(r.id);
-    groups.set(root, g);
-  }
-
-  const byId = new Map(candidates.map((c) => [c.id, c]));
+  const groups = groupDuplicates(candidates, selfEmails);
 
   const stats: DedupeStats = {
-    candidatesCreated: 0,
+    candidatesCreated: groups.length,
     exact: 0,
     high: 0,
     ambiguous: 0,
     rawConsidered: candidates.length,
   };
+  for (const g of groups) stats[g.confidence]++;
 
-  const inserts: typeof schema.mergeCandidates.$inferInsert[] = [];
-  for (const ids of groups.values()) {
-    if (ids.length < 2) continue;
-    const members: ConfidenceInput[] = ids.map((id) => byId.get(id)!);
-    const result = classify(members);
-    if (!result) continue;
-    inserts.push({
+  const inserts: (typeof schema.mergeCandidates.$inferInsert)[] = groups.map(
+    (g) => ({
       userId,
-      rawContactIds: ids,
-      confidence: result.confidence,
-      signals: result.signals as unknown as Record<string, unknown>,
+      rawContactIds: g.rawContactIds,
+      confidence: g.confidence,
+      signals: g.signals as unknown as Record<string, unknown>,
       status: "pending",
-    });
-    stats.candidatesCreated++;
-    stats[result.confidence]++;
-  }
+    }),
+  );
 
   if (inserts.length > 0) {
     // Insert in chunks to avoid huge single statements.

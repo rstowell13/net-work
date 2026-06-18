@@ -14,6 +14,7 @@ import { AddToWeekButton } from "@/components/AddToWeekButton";
 import { RefreshThreadSummaries } from "@/components/RefreshThreadSummaries";
 import { DiaryThreadOpener } from "@/components/DiaryThreadOpener";
 import { ContactTags } from "@/components/ContactTags";
+import { MergeContactButton } from "@/components/MergeContactButton";
 import { requireUser } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 import { getTagsForContact, listTags } from "@/lib/tags/queries";
@@ -702,6 +703,12 @@ export default async function ContactDetailPage({
             <MetaBlock title="Cadence override">
               Default · uses your global cadence rules.
             </MetaBlock>
+          </div>
+          <div className="mt-6">
+            <MergeContactButton
+              currentId={contact.id}
+              currentName={contact.displayName}
+            />
           </div>
         </section>
       </div>
