@@ -63,9 +63,15 @@ export interface DedupeGroup {
  * contact's own records. Two+ saved contacts stay auto/bulk-mergeable only when
  * a real identifier is shared across them (see below).
  */
+/** Stable key for a candidate group — lets a re-scan skip a group the user split. */
+export function groupKey(rawContactIds: string[]): string {
+  return [...rawContactIds].sort().join(",");
+}
+
 export function groupDuplicates(
   rows: DedupeRawInput[],
   selfEmails: Set<string> = new Set(),
+  suppressedKeys: Set<string> = new Set(),
 ): DedupeGroup[] {
   const uf = new UnionFind();
   rows.forEach((r) => uf.add(r.id));
@@ -135,6 +141,8 @@ export function groupDuplicates(
   const out: DedupeGroup[] = [];
   for (const ids of groups.values()) {
     if (ids.length < 2) continue;
+    // A group the user already split (declared "not the same") must not return.
+    if (suppressedKeys.has(groupKey(ids))) continue;
     const memberRows = ids.map((id) => byId.get(id)!);
 
     // How many distinct saved contacts does this group span?
