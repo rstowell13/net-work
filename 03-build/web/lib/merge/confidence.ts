@@ -3,6 +3,7 @@
  * Pure — no DB access.
  */
 import { normalizeRaw } from "./normalize";
+import { nameKey } from "./nicknames";
 
 export type Confidence = "exact" | "high" | "ambiguous";
 
@@ -22,6 +23,8 @@ export interface ConfidenceResult {
     sharedPhones: string[];
     sharedLinkedIn: string[];
     sharedName: string | null;
+    /** Set when names match only after nickname canonicalization (e.g. Joe↔Joseph). */
+    sharedNameKey: string | null;
     fieldConflicts: string[];
   };
 }
@@ -63,6 +66,17 @@ export function classify(group: ConfidenceInput[]): ConfidenceResult | null {
   const sharedName =
     allNames.size === 1 && names.every((n) => n) ? [...allNames][0] : null;
 
+  // Nickname-canonicalized name key: "Joe Prezuti" and "Joseph Prezuti" share
+  // one. Reported as a signal so the UI can label "nickname match"; it never
+  // promotes confidence on its own — a nickname group still has differing raw
+  // names, so it stays ambiguous unless an email/phone/LinkedIn also matches.
+  const nameKeys = names.map((n) => nameKey(n));
+  const allNameKeys = new Set(nameKeys.filter((k): k is string => !!k));
+  const sharedNameKey =
+    allNameKeys.size === 1 && nameKeys.every((k) => k)
+      ? [...allNameKeys][0]
+      : null;
+
   const fieldConflicts: string[] = [];
   // Conflicting non-empty names with no shared identifier => signal of conflict.
   if (allNames.size > 1) fieldConflicts.push("name");
@@ -72,6 +86,7 @@ export function classify(group: ConfidenceInput[]): ConfidenceResult | null {
     sharedPhones: phonePairwise,
     sharedLinkedIn: linkedinPairwise,
     sharedName,
+    sharedNameKey,
     fieldConflicts,
   };
 

@@ -149,6 +149,7 @@ export default async function MergePage() {
                         >
                           {c.members.length} records · {c.primarySignal}
                         </span>
+                        <MergeHint c={c} />
                       </div>
                       <span style={{ color: "var(--ink-faint)" }}>
                         <Chevron />
@@ -322,6 +323,26 @@ function Chevron() {
   );
 }
 
+function MergeHint({
+  c,
+}: {
+  c: Awaited<ReturnType<typeof getPendingCandidates>>[number];
+}) {
+  if (c.existingContacts.length === 0) return null;
+  const text =
+    c.existingContacts.length >= 2
+      ? `Merges ${c.existingContacts.length} saved contacts → keeps ${c.survivorName ?? "one"}`
+      : `Adds new records to ${c.survivorName ?? "a saved contact"}`;
+  return (
+    <span
+      className="truncate text-[11px] font-medium"
+      style={{ color: "var(--brass-deep)" }}
+    >
+      {text}
+    </span>
+  );
+}
+
 function AmbiguousCard({
   c,
 }: {
@@ -349,6 +370,12 @@ function AmbiguousCard({
           Ambiguous
         </span>
       </div>
+
+      {c.existingContacts.length > 0 && (
+        <div className="mb-3.5">
+          <MergeHint c={c} />
+        </div>
+      )}
 
       <div className="mb-3.5 flex flex-col gap-1.5">
         {c.members.map((m) => (

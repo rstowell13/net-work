@@ -55,5 +55,35 @@ describe("classify", () => {
       rc({ id: "2", name: "Sarah Kauffman" }),
     ]);
     expect(r?.confidence).toBe("ambiguous");
+    // Different surnames → no nickname bridge.
+    expect(r?.signals.sharedNameKey).toBeNull();
+  });
+
+  it("same name, different emails → high (the multi-email case)", () => {
+    const r = classify([
+      rc({ id: "1", name: "Marisol Vega", emails: ["marisol@a.com"] }),
+      rc({ id: "2", name: "marisol  vega", emails: ["m.vega@b.com"] }),
+    ]);
+    expect(r?.confidence).toBe("high");
+    expect(r?.signals.sharedNameKey).toBe("marisol vega");
+  });
+
+  it("ambiguous with sharedNameKey when only a nickname bridges the names", () => {
+    const r = classify([
+      rc({ id: "1", name: "Joe Prezuti", phones: ["(415) 555-0001"] }),
+      rc({ id: "2", name: "Joseph Prezuti", emails: ["joseph@a.com"] }),
+    ]);
+    expect(r?.confidence).toBe("ambiguous");
+    expect(r?.signals.sharedName).toBeNull();
+    expect(r?.signals.sharedNameKey).toBe("joseph prezuti");
+  });
+
+  it("no nickname bridge across different surnames", () => {
+    const r = classify([
+      rc({ id: "1", name: "Joe Smith" }),
+      rc({ id: "2", name: "Joseph Jones" }),
+    ]);
+    expect(r?.confidence).toBe("ambiguous");
+    expect(r?.signals.sharedNameKey).toBeNull();
   });
 });

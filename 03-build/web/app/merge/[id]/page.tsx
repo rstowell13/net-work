@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { requireUser } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 import { avatarColorVar, initials } from "@/lib/merge/avatar-color";
+import { pickSurvivor } from "@/lib/merge/apply";
 import { AmbiguousActions } from "@/components/merge/MergeActions";
 
 export const dynamic = "force-dynamic";
@@ -39,16 +40,36 @@ export default async function MergeDetailPage({
       avatarUrl: schema.rawContacts.avatarUrl,
       updatedAt: schema.rawContacts.updatedAt,
       sourceKind: schema.sources.kind,
+      contactId: schema.rawContacts.contactId,
+      savedName: schema.contacts.displayName,
     })
     .from(schema.rawContacts)
     .innerJoin(
       schema.sources,
       eq(schema.sources.id, schema.rawContacts.sourceId),
     )
+    .leftJoin(
+      schema.contacts,
+      eq(schema.contacts.id, schema.rawContacts.contactId),
+    )
     .where(inArray(schema.rawContacts.id, candidate.rawContactIds));
 
+  // Which saved contacts does this candidate span, and which will survive?
+  const existingContactIds = [
+    ...new Set(members.map((m) => m.contactId).filter((x): x is string => !!x)),
+  ];
+  const picked =
+    existingContactIds.length > 0
+      ? await pickSurvivor(user.id, existingContactIds)
+      : null;
+  const survivorId = picked?.survivorId ?? null;
+  const survivorName =
+    members.find((m) => m.contactId === survivorId)?.savedName ?? null;
+
   const primaryName =
-    members.find((m) => m.name && m.name.trim().length > 0)?.name ?? "Unknown";
+    survivorName ??
+    members.find((m) => m.name && m.name.trim().length > 0)?.name ??
+    "Unknown";
 
   return (
     <AppShell active="/merge">
@@ -104,6 +125,25 @@ export default async function MergeDetailPage({
           {members.length} records · status: {candidate.status}
         </p>
 
+        {existingContactIds.length >= 2 && survivorName && (
+          <p
+            className="mt-1 text-[13px] font-medium"
+            style={{ color: "var(--brass-deep)" }}
+          >
+            Approving merges {existingContactIds.length} saved contacts into{" "}
+            {survivorName} and removes {existingContactIds.length - 1} duplicate
+            {existingContactIds.length - 1 === 1 ? "" : "s"}.
+          </p>
+        )}
+        {existingContactIds.length === 1 && survivorName && (
+          <p
+            className="mt-1 text-[13px] font-medium"
+            style={{ color: "var(--brass-deep)" }}
+          >
+            Approving adds these records to {survivorName}.
+          </p>
+        )}
+
         <div className="mt-8 overflow-x-auto">
           <table className="w-full border-collapse text-[13px]">
             <thead>
@@ -118,6 +158,20 @@ export default async function MergeDetailPage({
                     style={{ borderColor: "var(--rule)", color: "var(--brass-deep)" }}
                   >
                     {m.sourceKind.replace(/_/g, " ")}
+                    {m.savedName && (
+                      <span
+                        className="mt-0.5 block normal-case tracking-normal text-[10px] font-normal"
+                        style={{
+                          color:
+                            m.contactId === survivorId
+                              ? "var(--fresh-green)"
+                              : "var(--ink-faint)",
+                        }}
+                      >
+                        {m.contactId === survivorId ? "keep · " : "saved · "}
+                        {m.savedName}
+                      </span>
+                    )}
                   </th>
                 ))}
               </tr>
