@@ -17,6 +17,18 @@ describe("isRoleAddress", () => {
     expect(isRoleAddress("mailer-daemon@acme.com")).toBe(true);
   });
 
+  it("matches no-reply embedded anywhere in the local-part", () => {
+    expect(isRoleAddress("apps-noreply@google.com")).toBe(true);
+    expect(isRoleAddress("ogb-noreply@anthem.com")).toBe(true);
+    expect(isRoleAddress("workspace-noreply@google.com")).toBe(true);
+  });
+
+  it("matches accounts-payable/receivable and collections aliases", () => {
+    expect(isRoleAddress("ap@stackhomes.com")).toBe(true);
+    expect(isRoleAddress("ar@vendor.com")).toBe(true);
+    expect(isRoleAddress("collections@vendor.com")).toBe(true);
+  });
+
   it("is case-insensitive", () => {
     expect(isRoleAddress("INFO@Acme.com")).toBe(true);
     expect(isRoleAddress("NoReply@Acme.com")).toBe(true);

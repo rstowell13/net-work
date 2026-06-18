@@ -24,6 +24,7 @@ import { db, schema } from "@/lib/db";
 import { normalizeName } from "./normalize";
 import { qualifiesForPromotion } from "./promote-criteria";
 import { isRoleAddress } from "@/lib/contacts/role-address";
+import { isBusinessName } from "@/lib/contacts/business-name";
 import { getSelfEmails, relinkContact } from "@/lib/relink";
 
 export { qualifiesForPromotion };
@@ -113,6 +114,12 @@ export async function enrichAndPromote(
     if (!email || selfEmails.has(email) || isRoleAddress(email)) {
       // Role / automated addresses (info@, support@, noreply@, …) never become
       // contacts — see lib/contacts/role-address.ts.
+      stats.skipped++;
+      continue;
+    }
+    if (r.name && isBusinessName(r.name)) {
+      // Business / department names (Collections Department, Accounts Payable,
+      // …) never become contacts — see lib/contacts/business-name.ts.
       stats.skipped++;
       continue;
     }
