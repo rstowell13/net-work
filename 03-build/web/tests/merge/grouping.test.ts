@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { groupDuplicates, type DedupeRawInput } from "@/lib/merge/grouping";
+import {
+  groupDuplicates,
+  groupKey,
+  type DedupeRawInput,
+} from "@/lib/merge/grouping";
 
 const r = (
   over: Partial<DedupeRawInput> & { id: string },
@@ -153,5 +157,24 @@ describe("groupDuplicates", () => {
       r({ id: "b", contactId: "y", name: "Andrew Lloyd", emails: ["hit-reply@dotloop.com"] }),
     ]);
     expect(groups).toHaveLength(0);
+  });
+
+  it("suppresses a group the user already split (split stays split)", () => {
+    const rows = [
+      r({ id: "a", contactId: "cA", name: "Joseph Presutti", emails: ["jp@nexfab.com"] }),
+      r({ id: "b", contactId: "cB", name: "Joseph Presutti", emails: ["jp@k2.com"] }),
+    ];
+    expect(groupDuplicates(rows)).toHaveLength(1); // would normally resurface
+    const suppressed = new Set([groupKey(["a", "b"])]);
+    expect(groupDuplicates(rows, new Set(), suppressed)).toHaveLength(0);
+  });
+
+  it("still surfaces other groups when an unrelated one is suppressed", () => {
+    const rows = [
+      r({ id: "a", name: "Joe Prezuti", emails: ["x@y.com"] }),
+      r({ id: "b", name: "Joe Prezuti", emails: ["x@y.com"] }),
+    ];
+    const suppressed = new Set([groupKey(["c", "d"])]); // a different group
+    expect(groupDuplicates(rows, new Set(), suppressed)).toHaveLength(1);
   });
 });

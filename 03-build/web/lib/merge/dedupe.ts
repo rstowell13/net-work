@@ -8,10 +8,10 @@
  * time (see apply.ts). Idempotent.
  */
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { getSelfEmails } from "@/lib/relink";
-import { groupDuplicates } from "./grouping";
+import { groupDuplicates, groupKey } from "./grouping";
 
 export interface DedupeStats {
   candidatesCreated: number;
@@ -40,9 +40,11 @@ export async function runDedupe(userId: string): Promise<DedupeStats> {
     )
     .where(eq(schema.sources.userId, userId));
 
-  // Clear stale pending suggestions so each scan reflects the current matching
-  // logic (a re-scan refreshes the queue). Approved candidates stay — their raws
-  // are already merged and must remain locked.
+  // Clear stale PENDING suggestions so each scan reflects the current matching
+  // logic (a re-scan refreshes the queue). Resolved candidates are preserved:
+  //  - approved → their raws are already merged and stay locked out of scanning;
+  //  - split / skipped → the user reviewed that exact group and said "not the
+  //    same", so we never re-create it (this is what makes a split stick).
   await db
     .delete(schema.mergeCandidates)
     .where(
@@ -52,18 +54,26 @@ export async function runDedupe(userId: string): Promise<DedupeStats> {
       ),
     );
 
-  const approved = await db
-    .select({ rawContactIds: schema.mergeCandidates.rawContactIds })
+  const resolved = await db
+    .select({
+      rawContactIds: schema.mergeCandidates.rawContactIds,
+      status: schema.mergeCandidates.status,
+    })
     .from(schema.mergeCandidates)
     .where(
       and(
         eq(schema.mergeCandidates.userId, userId),
-        eq(schema.mergeCandidates.status, "approved"),
+        inArray(schema.mergeCandidates.status, ["approved", "split", "skipped"]),
       ),
     );
   const lockedRawIds = new Set<string>();
-  for (const c of approved) {
-    for (const rid of c.rawContactIds) lockedRawIds.add(rid);
+  const suppressedKeys = new Set<string>();
+  for (const c of resolved) {
+    if (c.status === "approved") {
+      for (const rid of c.rawContactIds) lockedRawIds.add(rid);
+    } else {
+      suppressedKeys.add(groupKey(c.rawContactIds));
+    }
   }
 
   const candidates = raws.filter((r) => !lockedRawIds.has(r.id));
@@ -73,7 +83,7 @@ export async function runDedupe(userId: string): Promise<DedupeStats> {
   // own (now-included) saved contact onto huge swaths of the address book.
   const selfEmails = await getSelfEmails(userId);
 
-  const groups = groupDuplicates(candidates, selfEmails);
+  const groups = groupDuplicates(candidates, selfEmails, suppressedKeys);
 
   const stats: DedupeStats = {
     candidatesCreated: groups.length,
