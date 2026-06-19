@@ -7,6 +7,7 @@ import { db, schema } from "@/lib/db";
 import { avatarColorVar, initials } from "@/lib/merge/avatar-color";
 import { pickSurvivor } from "@/lib/merge/apply";
 import { AmbiguousActions } from "@/components/merge/MergeActions";
+import { PartitionEditor } from "@/components/merge/PartitionEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,27 @@ export default async function MergeDetailPage({
     survivorName ??
     members.find((m) => m.name && m.name.trim().length > 0)?.name ??
     "Unknown";
+
+  // Props for the "split into separate people" editor.
+  const involvedContacts = [
+    ...new Map(
+      members
+        .filter((m) => m.contactId)
+        .map((m) => [
+          m.contactId as string,
+          { id: m.contactId as string, name: m.savedName ?? "Unknown" },
+        ]),
+    ).values(),
+  ];
+  const partitionRecords = members.map((m) => ({
+    id: m.id,
+    name: m.name,
+    sourceKind: m.sourceKind,
+    email: m.emails?.[0] ?? null,
+    phone: m.phones?.[0] ?? null,
+    contactId: m.contactId,
+    savedName: m.savedName,
+  }));
 
   return (
     <AppShell active="/merge">
@@ -221,8 +243,17 @@ export default async function MergeDetailPage({
         </div>
 
         {candidate.status === "pending" ? (
-          <div className="mt-8 max-w-md">
-            <AmbiguousActions id={candidate.id} />
+          <div className="mt-8 flex flex-col gap-4">
+            <div className="max-w-md">
+              <AmbiguousActions id={candidate.id} />
+            </div>
+            {members.length >= 2 && (
+              <PartitionEditor
+                candidateId={candidate.id}
+                records={partitionRecords}
+                involvedContacts={involvedContacts}
+              />
+            )}
           </div>
         ) : (
           <p className="mt-8 text-[13px]" style={{ color: "var(--ink-muted)" }}>

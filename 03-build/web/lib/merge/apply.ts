@@ -12,6 +12,11 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { normalizeRaw } from "./normalize";
 import { classify } from "./confidence";
+import {
+  validatePartition,
+  pluralityBucketIndex,
+  type PartitionBucket,
+} from "./partition-plan";
 import { relinkContact } from "@/lib/relink";
 
 // Higher = preferred for canonical fields.
@@ -207,6 +212,106 @@ export async function pickSurvivor(
   return { survivorId, loserIds };
 }
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Move a contact's curated, contact-level content (tags, follow-ups, notes,
+ * scores, plan items, summaries, score history) from one or more source contacts
+ * onto a target, handling the PK/unique-constrained tables. Diary
+ * (messages/emails/calls/calendar) is keyed by handle and handled separately by
+ * the caller (moved directly, or nulled + relinked).
+ */
+async function moveCuratedContent(
+  tx: Tx,
+  fromContactIds: string[],
+  toContactId: string,
+): Promise<void> {
+  if (fromContactIds.length === 0) return;
+  const now = new Date();
+
+  // contact_tags — PK (contact_id, tag_id): add only tags the target lacks.
+  const targetTags = await tx
+    .select({ tagId: schema.contactTags.tagId })
+    .from(schema.contactTags)
+    .where(eq(schema.contactTags.contactId, toContactId));
+  const targetSet = new Set(targetTags.map((t) => t.tagId));
+  const fromTags = await tx
+    .select({ tagId: schema.contactTags.tagId })
+    .from(schema.contactTags)
+    .where(inArray(schema.contactTags.contactId, fromContactIds));
+  const addTags = [...new Set(fromTags.map((t) => t.tagId))].filter(
+    (t) => !targetSet.has(t),
+  );
+  await tx
+    .delete(schema.contactTags)
+    .where(inArray(schema.contactTags.contactId, fromContactIds));
+  if (addTags.length > 0) {
+    await tx
+      .insert(schema.contactTags)
+      .values(addTags.map((tagId) => ({ contactId: toContactId, tagId })));
+  }
+
+  // Plain moves (no uniqueness on contact_id).
+  await tx
+    .update(schema.followUps)
+    .set({ contactId: toContactId, updatedAt: now })
+    .where(inArray(schema.followUps.contactId, fromContactIds));
+  await tx
+    .update(schema.notes)
+    .set({ contactId: toContactId, updatedAt: now })
+    .where(inArray(schema.notes.contactId, fromContactIds));
+  await tx
+    .update(schema.scoreHistory)
+    .set({ contactId: toContactId })
+    .where(inArray(schema.scoreHistory.contactId, fromContactIds));
+
+  // Derived tables — drop; they regenerate.
+  await tx
+    .delete(schema.scores)
+    .where(inArray(schema.scores.contactId, fromContactIds));
+  await tx
+    .delete(schema.suggestionState)
+    .where(inArray(schema.suggestionState.contactId, fromContactIds));
+  await tx
+    .delete(schema.relationshipSummaries)
+    .where(inArray(schema.relationshipSummaries.contactId, fromContactIds));
+
+  // weekly_plan_items — UNIQUE (plan_id, contact_id): move one per plan the
+  // target isn't already in; drop the rest.
+  const targetPlans = await tx
+    .select({ planId: schema.weeklyPlanItems.planId })
+    .from(schema.weeklyPlanItems)
+    .where(eq(schema.weeklyPlanItems.contactId, toContactId));
+  const claimed = new Set(targetPlans.map((p) => p.planId));
+  const items = await tx
+    .select({
+      id: schema.weeklyPlanItems.id,
+      planId: schema.weeklyPlanItems.planId,
+    })
+    .from(schema.weeklyPlanItems)
+    .where(inArray(schema.weeklyPlanItems.contactId, fromContactIds));
+  const moveItemIds: string[] = [];
+  const dropItemIds: string[] = [];
+  for (const it of items) {
+    if (claimed.has(it.planId)) dropItemIds.push(it.id);
+    else {
+      claimed.add(it.planId);
+      moveItemIds.push(it.id);
+    }
+  }
+  if (moveItemIds.length > 0) {
+    await tx
+      .update(schema.weeklyPlanItems)
+      .set({ contactId: toContactId })
+      .where(inArray(schema.weeklyPlanItems.id, moveItemIds));
+  }
+  if (dropItemIds.length > 0) {
+    await tx
+      .delete(schema.weeklyPlanItems)
+      .where(inArray(schema.weeklyPlanItems.id, dropItemIds));
+  }
+}
+
 /**
  * Merge one or more loser contacts into a survivor. Moves every record that
  * references a loser contact onto the survivor (handling the unique/PK
@@ -292,38 +397,7 @@ export async function mergeIntoSurvivor(
     }
 
     if (loserIds.length > 0) {
-      // 2. contact_tags — PK (contact_id, tag_id). Move only tags the survivor
-      //    doesn't already have; drop the duplicates.
-      const survTags = await tx
-        .select({ tagId: schema.contactTags.tagId })
-        .from(schema.contactTags)
-        .where(eq(schema.contactTags.contactId, survivorId));
-      const survSet = new Set(survTags.map((t) => t.tagId));
-      const loserTags = await tx
-        .select({ tagId: schema.contactTags.tagId })
-        .from(schema.contactTags)
-        .where(inArray(schema.contactTags.contactId, loserIds));
-      const toAdd = [...new Set(loserTags.map((t) => t.tagId))].filter(
-        (t) => !survSet.has(t),
-      );
-      await tx
-        .delete(schema.contactTags)
-        .where(inArray(schema.contactTags.contactId, loserIds));
-      if (toAdd.length > 0) {
-        await tx
-          .insert(schema.contactTags)
-          .values(toAdd.map((tagId) => ({ contactId: survivorId, tagId })));
-      }
-
-      // 3. Plain moves (no uniqueness on contact_id).
-      await tx
-        .update(schema.followUps)
-        .set({ contactId: survivorId, updatedAt: now })
-        .where(inArray(schema.followUps.contactId, loserIds));
-      await tx
-        .update(schema.notes)
-        .set({ contactId: survivorId, updatedAt: now })
-        .where(inArray(schema.notes.contactId, loserIds));
+      // Move diary (keyed by handle) directly onto the survivor.
       await tx
         .update(schema.messageThreads)
         .set({ contactId: survivorId, updatedAt: now })
@@ -348,62 +422,12 @@ export async function mergeIntoSurvivor(
         .update(schema.calendarEvents)
         .set({ contactId: survivorId })
         .where(inArray(schema.calendarEvents.contactId, loserIds));
-      await tx
-        .update(schema.scoreHistory)
-        .set({ contactId: survivorId })
-        .where(inArray(schema.scoreHistory.contactId, loserIds));
 
-      // 4. Constrained / derived tables — drop loser rows. Scores recompute on
-      //    the next scoring pass; suggestion_state is one-per-contact; summaries
-      //    are stale for the combined contact and regenerate on next view.
-      await tx
-        .delete(schema.scores)
-        .where(inArray(schema.scores.contactId, loserIds));
-      await tx
-        .delete(schema.suggestionState)
-        .where(inArray(schema.suggestionState.contactId, loserIds));
-      await tx
-        .delete(schema.relationshipSummaries)
-        .where(inArray(schema.relationshipSummaries.contactId, loserIds));
+      // Move curated content (tags/notes/follow-ups/plan-items/scores/…).
+      await moveCuratedContent(tx, loserIds, survivorId);
 
-      // 5. weekly_plan_items — UNIQUE (plan_id, contact_id). Move one item per
-      //    plan the survivor isn't already in; drop the rest.
-      const survPlans = await tx
-        .select({ planId: schema.weeklyPlanItems.planId })
-        .from(schema.weeklyPlanItems)
-        .where(eq(schema.weeklyPlanItems.contactId, survivorId));
-      const claimed = new Set(survPlans.map((p) => p.planId));
-      const loserItems = await tx
-        .select({
-          id: schema.weeklyPlanItems.id,
-          planId: schema.weeklyPlanItems.planId,
-        })
-        .from(schema.weeklyPlanItems)
-        .where(inArray(schema.weeklyPlanItems.contactId, loserIds));
-      const moveItemIds: string[] = [];
-      const dropItemIds: string[] = [];
-      for (const it of loserItems) {
-        if (claimed.has(it.planId)) {
-          dropItemIds.push(it.id);
-        } else {
-          claimed.add(it.planId);
-          moveItemIds.push(it.id);
-        }
-      }
-      if (moveItemIds.length > 0) {
-        await tx
-          .update(schema.weeklyPlanItems)
-          .set({ contactId: survivorId })
-          .where(inArray(schema.weeklyPlanItems.id, moveItemIds));
-      }
-      if (dropItemIds.length > 0) {
-        await tx
-          .delete(schema.weeklyPlanItems)
-          .where(inArray(schema.weeklyPlanItems.id, dropItemIds));
-      }
-
-      // 6. Soft-delete the losers (never hard delete — raw_contacts.contact_id
-      //    is ON DELETE SET NULL, so a hard delete could orphan records).
+      // Soft-delete the losers (never hard delete — raw_contacts.contact_id is
+      // ON DELETE SET NULL, so a hard delete could orphan records).
       await tx
         .update(schema.contacts)
         .set({ deletedAt: now, updatedAt: now })
@@ -619,4 +643,204 @@ export async function mergeContacts(
   const memberRawIds = memberRawRows.map((r) => r.id);
   const members = await loadMembers(memberRawIds);
   return mergeIntoSurvivor(userId, keepId, [mergeId], memberRawIds, members);
+}
+
+/**
+ * Partition a merge candidate's records across MULTIPLE people. Each bucket
+ * becomes one contact (a kept existing contact or a new one); its assigned
+ * records move to it. Diary follows records by handle (detach all involved
+ * contacts' diary, then relink each resulting contact); curated content of a
+ * dissolved contact goes to the bucket holding most of its records. The
+ * candidate is marked "split" so the exact group never re-surfaces.
+ *
+ * `buckets[i] = { keepContactId?, name?, rawIds }`. Records left out of every
+ * bucket stay on their current contact.
+ */
+export async function partitionCandidate(
+  userId: string,
+  candidateId: string,
+  buckets: PartitionBucket[],
+): Promise<{ contactIds: string[]; primaryContactId: string }> {
+  const [candidate] = await db
+    .select()
+    .from(schema.mergeCandidates)
+    .where(
+      and(
+        eq(schema.mergeCandidates.id, candidateId),
+        eq(schema.mergeCandidates.userId, userId),
+      ),
+    )
+    .limit(1);
+  if (!candidate) throw new Error("candidate_not_found");
+  if (candidate.status !== "pending") {
+    throw new Error(`candidate_status_${candidate.status}`);
+  }
+
+  const members = await loadMembers(candidate.rawContactIds);
+  if (members.length === 0) throw new Error("candidate_empty");
+  const memberById = new Map(members.map((m) => [m.id, m]));
+
+  const involvedContactIds = [
+    ...new Set(members.map((m) => m.contactId).filter((c): c is string => !!c)),
+  ];
+
+  const err = validatePartition(
+    candidate.rawContactIds,
+    involvedContactIds,
+    buckets,
+  );
+  if (err) throw new Error(err);
+
+  const nonEmpty = buckets.filter((b) => b.rawIds.length > 0);
+
+  // One bucket covering every record into a new contact === today's Approve.
+  if (
+    nonEmpty.length === 1 &&
+    !nonEmpty[0].keepContactId &&
+    nonEmpty[0].rawIds.length === candidate.rawContactIds.length
+  ) {
+    const r = await applyCandidate(userId, candidateId);
+    return { contactIds: [r.contactId], primaryContactId: r.contactId };
+  }
+
+  const bucketSets = nonEmpty.map((b) => new Set(b.rawIds));
+  // Primary = survivor of the bucket holding the most records.
+  let primaryIdx = 0;
+  for (let i = 1; i < nonEmpty.length; i++) {
+    if (nonEmpty[i].rawIds.length > nonEmpty[primaryIdx].rawIds.length) {
+      primaryIdx = i;
+    }
+  }
+
+  let survivorIds: string[] = [];
+  let survivingInvolved: string[] = [];
+
+  await db.transaction(async (tx) => {
+    const now = new Date();
+
+    // 1. Resolve a survivor per bucket (create new where needed) + reassign
+    //    exactly that bucket's records to it.
+    survivorIds = [];
+    for (const b of nonEmpty) {
+      let survivorId = b.keepContactId ?? null;
+      if (!survivorId) {
+        const sub = b.rawIds
+          .map((id) => memberById.get(id))
+          .filter((m): m is MemberRow => !!m);
+        const [c] = await tx
+          .insert(schema.contacts)
+          .values({
+            userId,
+            displayName:
+              b.name?.trim() || pickBest(sub, (r) => r.name) || "Unknown",
+            photoUrl: pickBest(sub, (r) => r.avatarUrl),
+            primaryEmail:
+              pickBest(sub, (r) => normalizeRaw(r).emails[0] ?? null) ?? null,
+            primaryPhone:
+              pickBest(sub, (r) => normalizeRaw(r).phones[0] ?? null) ?? null,
+            linkedinUrl: pickBest(sub, (r) => normalizeRaw(r).linkedin),
+          })
+          .returning({ id: schema.contacts.id });
+        survivorId = c.id;
+      }
+      survivorIds.push(survivorId);
+      await tx
+        .update(schema.rawContacts)
+        .set({ contactId: survivorId, updatedAt: now })
+        .where(inArray(schema.rawContacts.id, b.rawIds));
+    }
+
+    // 2. Curated content of a dissolving involved contact (not a kept survivor)
+    //    goes to the bucket holding most of its records.
+    for (const cid of involvedContactIds) {
+      if (survivorIds.includes(cid)) continue; // kept — keep its content
+      const cidRawIds = members
+        .filter((m) => m.contactId === cid)
+        .map((m) => m.id);
+      const idx = pluralityBucketIndex(cidRawIds, bucketSets);
+      if (idx >= 0 && survivorIds[idx] && survivorIds[idx] !== cid) {
+        await moveCuratedContent(tx, [cid], survivorIds[idx]);
+      }
+    }
+
+    // 3. Detach diary from every involved contact so relink can re-home each row
+    //    by handle to whichever person now owns the matching record.
+    if (involvedContactIds.length > 0) {
+      const wh = inArray(schema.messageThreads.contactId, involvedContactIds);
+      await tx.update(schema.messageThreads).set({ contactId: null }).where(wh);
+      await tx
+        .update(schema.messages)
+        .set({ contactId: null })
+        .where(inArray(schema.messages.contactId, involvedContactIds));
+      await tx
+        .update(schema.emailThreads)
+        .set({ contactId: null })
+        .where(inArray(schema.emailThreads.contactId, involvedContactIds));
+      await tx
+        .update(schema.emails)
+        .set({ contactId: null })
+        .where(inArray(schema.emails.contactId, involvedContactIds));
+      await tx
+        .update(schema.callLogs)
+        .set({ contactId: null })
+        .where(inArray(schema.callLogs.contactId, involvedContactIds));
+      await tx
+        .update(schema.calendarEvents)
+        .set({ contactId: null })
+        .where(inArray(schema.calendarEvents.contactId, involvedContactIds));
+    }
+
+    // 4. Recount records on involved contacts; soft-delete any now empty and not
+    //    a kept survivor.
+    const counts =
+      involvedContactIds.length > 0
+        ? await tx
+            .select({
+              contactId: schema.rawContacts.contactId,
+              n: sql<number>`count(*)::int`,
+            })
+            .from(schema.rawContacts)
+            .where(inArray(schema.rawContacts.contactId, involvedContactIds))
+            .groupBy(schema.rawContacts.contactId)
+        : [];
+    const liveSet = new Set(
+      counts.filter((c) => c.n > 0).map((c) => c.contactId as string),
+    );
+    survivingInvolved = involvedContactIds.filter((cid) => liveSet.has(cid));
+    const toDelete = involvedContactIds.filter(
+      (cid) => !liveSet.has(cid) && !survivorIds.includes(cid),
+    );
+    if (toDelete.length > 0) {
+      await tx
+        .update(schema.contacts)
+        .set({ deletedAt: now, updatedAt: now })
+        .where(inArray(schema.contacts.id, toDelete));
+    }
+
+    // 5. Mark candidate "split" — records the decision AND suppresses this exact
+    //    group from re-surfacing on the next re-scan (groupKey suppression).
+    await tx
+      .update(schema.mergeCandidates)
+      .set({
+        status: "split",
+        resolvedAt: now,
+        updatedAt: now,
+        resultingContactId: survivorIds[primaryIdx] ?? null,
+      })
+      .where(eq(schema.mergeCandidates.id, candidateId));
+  });
+
+  // 6. Relink every contact that now holds records (new survivors + kept +
+  //    leftover involved) so its diary re-attaches by handle. Outside the tx.
+  const relinkTargets = [...new Set([...survivorIds, ...survivingInvolved])];
+  for (const cid of relinkTargets) {
+    await relinkContact(cid).catch((e) =>
+      console.error(`relink failed for contact ${cid}:`, e),
+    );
+  }
+
+  return {
+    contactIds: [...new Set(survivorIds)],
+    primaryContactId: survivorIds[primaryIdx] ?? survivorIds[0] ?? "",
+  };
 }
