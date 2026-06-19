@@ -8,6 +8,7 @@ import {
   BulkMergeButton,
   AmbiguousActions,
 } from "@/components/merge/MergeActions";
+import { PartitionEditor } from "@/components/merge/PartitionEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -418,6 +419,30 @@ function AmbiguousCard({
       </div>
 
       <AmbiguousActions id={c.id} />
+
+      {c.members.length >= 2 && (
+        <div className="mt-3">
+          <PartitionEditor
+            candidateId={c.id}
+            records={c.members.map((m) => ({
+              id: m.id,
+              name: m.name,
+              sourceKind: m.sourceKind,
+              email: m.email,
+              phone: m.phone,
+              contactId: m.contactId,
+              savedName: m.contactId
+                ? (c.existingContacts.find((e) => e.id === m.contactId)
+                    ?.displayName ?? null)
+                : null,
+            }))}
+            involvedContacts={c.existingContacts.map((e) => ({
+              id: e.id,
+              name: e.displayName,
+            }))}
+          />
+        </div>
+      )}
     </article>
   );
 }
