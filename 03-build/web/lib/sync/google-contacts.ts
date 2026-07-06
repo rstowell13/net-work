@@ -137,13 +137,6 @@ async function getTokenForSource(sourceId: string) {
  * Throws if not connected.
  */
 export async function getGoogleContactsSourceId(userId: string): Promise<string> {
-  const [src] = await db
-    .select({ id: sources.id })
-    .from(sources)
-    .where(eq(sources.userId, userId))
-    .limit(50); // we'll filter in JS — only ~3 google rows per user
-  void src; // not used; full filter below
-
   const allRows = await db.select().from(sources).where(eq(sources.userId, userId));
   const found = allRows.find((s) => s.kind === "google_contacts");
   if (!found) throw new Error("google_contacts source not connected");

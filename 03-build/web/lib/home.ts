@@ -2,7 +2,7 @@ import "server-only";
 import { and, count, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { computeFreshness } from "@/lib/scoring/freshness";
-import { listContacts, type ContactListRow } from "@/lib/contacts/queries";
+import { getFreshnessForContactIds } from "@/lib/contacts/queries";
 import { getCurrentPlan } from "@/lib/weekly-plan";
 import type { HomePlanItem } from "@/components/HomePlan";
 
@@ -30,11 +30,6 @@ export async function getHomeData(userId: string): Promise<HomeData> {
   let reached = 0;
   let connected = 0;
 
-  // Pre-fetch all kept contacts for freshness/lastSeen lookup.
-  const contactIndex = new Map<string, ContactListRow>();
-  const all = await listContacts(userId, { status: "all" }, 2000);
-  for (const c of all) contactIndex.set(c.id, c);
-
   if (plan) {
     const rows = await db
       .select({
@@ -59,10 +54,16 @@ export async function getHomeData(userId: string): Promise<HomeData> {
       )
       .orderBy(schema.weeklyPlanItems.createdAt);
 
+    // Freshness/lastSeen only for this week's plan contacts — not the whole
+    // contact book (previously up to 2000 rows hydrated through ~13
+    // aggregate GROUP-BYs just to render a handful of plan cards).
+    const contactIds = rows.map((r) => r.contactId);
+    const freshnessById = await getFreshnessForContactIds(contactIds);
+
     for (const r of rows) {
       if (r.status === "reached" || r.status === "connected") reached++;
       if (r.status === "connected") connected++;
-      const idx = contactIndex.get(r.contactId);
+      const idx = freshnessById.get(r.contactId);
       items.push({
         itemId: r.itemId,
         contactId: r.contactId,

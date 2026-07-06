@@ -136,6 +136,34 @@ async function aggregateInteractions365(
   return out;
 }
 
+/**
+ * Freshness (lastSeenAt + score) for an explicit set of contact ids —
+ * for callers (e.g. the home page) that already know which contacts they
+ * care about and don't need the full listContacts hydration (sources, tags,
+ * full contact row) for the other ~2000 contacts that aren't in view.
+ */
+export async function getFreshnessForContactIds(
+  contactIds: string[],
+): Promise<Map<string, { lastSeenAt: Date | null; freshness: FreshnessResult }>> {
+  const out = new Map<string, { lastSeenAt: Date | null; freshness: FreshnessResult }>();
+  if (contactIds.length === 0) return out;
+  const [lastSeen, freq] = await Promise.all([
+    aggregateLastSeen(contactIds),
+    aggregateInteractions365(contactIds),
+  ]);
+  for (const id of contactIds) {
+    const ls = lastSeen.get(id) ?? null;
+    out.set(id, {
+      lastSeenAt: ls,
+      freshness: computeFreshness({
+        lastSeenAt: ls,
+        interactions365: freq.get(id) ?? 0,
+      }),
+    });
+  }
+  return out;
+}
+
 async function aggregateSources(
   contactIds: string[],
 ): Promise<Map<string, { kinds: Set<string>; count: number }>> {
@@ -248,7 +276,85 @@ export async function listContacts(
     conds.push(inArray(schema.contacts.id, taggedIds));
   }
 
-  const rows = await db
+  let rows: (typeof schema.contacts.$inferSelect)[];
+
+  if (filters.recency) {
+    // The recency threshold depends on lastSeenAt, which is computed from
+    // aggregates, not a column we can push into this WHERE. Filtering after
+    // the LIMIT would silently drop qualifying contacts past the first page
+    // (a correctness bug, not just a perf one), so instead: pull every
+    // matching id (cheap — id + updatedAt only), compute lastSeen for the
+    // whole candidate set, filter by recency, THEN take the top `limit` by
+    // updatedAt and hydrate full rows + the remaining aggregates only for
+    // that final page.
+    const candidates = await db
+      .select({ id: schema.contacts.id, updatedAt: schema.contacts.updatedAt })
+      .from(schema.contacts)
+      .where(and(...conds))
+      .orderBy(desc(schema.contacts.updatedAt));
+
+    const candidateIds = candidates.map((c) => c.id);
+    const lastSeenAll = await aggregateLastSeen(candidateIds);
+    const days = (d: Date | null) =>
+      d ? Math.floor((Date.now() - d.getTime()) / 86400_000) : null;
+    const matchesRecency = (d: number | null) => {
+      if (d === null) return filters.recency === "365_plus";
+      switch (filters.recency) {
+        case "0_30":
+          return d < 30;
+        case "30_90":
+          return d >= 30 && d < 90;
+        case "90_365":
+          return d >= 90 && d < 365;
+        case "365_plus":
+          return d >= 365;
+        default:
+          return true;
+      }
+    };
+    const keptIds = candidates
+      .filter((c) => matchesRecency(days(lastSeenAll.get(c.id) ?? null)))
+      .slice(0, limit)
+      .map((c) => c.id);
+    if (keptIds.length === 0) return [];
+
+    rows = await db
+      .select()
+      .from(schema.contacts)
+      .where(inArray(schema.contacts.id, keptIds))
+      .orderBy(desc(schema.contacts.updatedAt));
+
+    const ids = rows.map((r) => r.id);
+    const [sources, freq, tags] = await Promise.all([
+      aggregateSources(ids),
+      aggregateInteractions365(ids),
+      aggregateTags(ids),
+    ]);
+    return rows.map((c) => {
+      const ls = lastSeenAll.get(c.id) ?? null;
+      const src = sources.get(c.id) ?? { kinds: new Set<string>(), count: 0 };
+      const interactions = freq.get(c.id) ?? 0;
+      return {
+        id: c.id,
+        displayName: c.displayName,
+        primaryEmail: c.primaryEmail,
+        primaryPhone: c.primaryPhone,
+        photoUrl: c.photoUrl,
+        category: c.category,
+        triageStatus: c.triageStatus,
+        lastSeenAt: ls,
+        freshness: computeFreshness({
+          lastSeenAt: ls,
+          interactions365: interactions,
+        }),
+        sources: [...src.kinds],
+        rawCount: src.count,
+        tags: tags.get(c.id) ?? [],
+      };
+    });
+  }
+
+  rows = await db
     .select()
     .from(schema.contacts)
     .where(and(...conds))
@@ -263,7 +369,7 @@ export async function listContacts(
     aggregateTags(ids),
   ]);
 
-  let result: ContactListRow[] = rows.map((c) => {
+  return rows.map((c) => {
     const ls = lastSeen.get(c.id) ?? null;
     const src = sources.get(c.id) ?? { kinds: new Set<string>(), count: 0 };
     const interactions = freq.get(c.id) ?? 0;
@@ -285,28 +391,6 @@ export async function listContacts(
       tags: tags.get(c.id) ?? [],
     };
   });
-
-  if (filters.recency) {
-    const days = (d: Date | null) =>
-      d ? Math.floor((Date.now() - d.getTime()) / 86400_000) : null;
-    result = result.filter((r) => {
-      const d = days(r.lastSeenAt);
-      if (d === null) return filters.recency === "365_plus";
-      switch (filters.recency) {
-        case "0_30":
-          return d < 30;
-        case "30_90":
-          return d >= 30 && d < 90;
-        case "90_365":
-          return d >= 90 && d < 365;
-        case "365_plus":
-          return d >= 365;
-        default:
-          return true;
-      }
-    });
-  }
-  return result;
 }
 
 export async function getStatusCounts(userId: string) {
