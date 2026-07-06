@@ -170,4 +170,4 @@ All in `03-build/web` unless noted.
 - [x] P3 sync repairs (calendar watermark+batching rewrite, gmail incremental-bail fix, xmax recordsNew, stale-run sweep; 170 tests green) · [x] P4 merge engine (pair suppression, TOCTOU claims, rebuild loop guard, apply.ts split; 158 tests green) · [ ] P10 perf wins
 - [x] P5 relink/freshness (shared pure matcher, case-proofed SQL, scoped ingest relink, unified freshness w/ group exclusion) · [x] P6 route consolidation (requireUserApi, ownership guard, error codes; orch added candidate_already_resolved mapping) · [x] P8 UI consolidation (ContactHeader/SourceChip/PageContainer/SearchHitList, shared helpers)
 - [x] P7 ingest extraction (lib/sync/mac-agent.ts, batched upserts, reverse-map; 188 tests) · [x] P9 contact page (911→264 lines, Suspense summary, cheap staleness key)
-- [ ] P12 integration tests (stretch) · [ ] P13 review + PR + post-deploy
+- [x] P12 integration tests (11/11 vs real Postgres; FOUND+FIXED prod bug: drizzle sql-template array params broke email/calendar relink) · [ ] P13 review + PR + post-deploy (reviewer running)
