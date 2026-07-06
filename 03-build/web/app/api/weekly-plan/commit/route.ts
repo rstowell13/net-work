@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth";
+import { ApiError, handleApi, requireUserApi } from "@/lib/api";
 import { commitPlan } from "@/lib/weekly-plan";
 
 export const runtime = "nodejs";
 
-export async function POST(req: Request) {
-  const user = await requireUser();
+export const POST = handleApi(async (req: Request) => {
+  const user = await requireUserApi();
   const body = (await req.json()) as {
     contactIds?: string[];
     source?: "suggestions_flow" | "add_to_this_week";
   };
   if (!body?.contactIds) {
-    return NextResponse.json({ error: "missing_fields" }, { status: 400 });
+    throw new ApiError("missing_fields", 400);
   }
   const result = await commitPlan(
     user.id,
@@ -19,4 +19,4 @@ export async function POST(req: Request) {
     body.source ?? "suggestions_flow",
   );
   return NextResponse.json(result);
-}
+});

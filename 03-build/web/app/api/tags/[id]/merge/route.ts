@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { requireUser } from "@/lib/auth";
+import { ApiError, handleApi, requireUserApi } from "@/lib/api";
 import { db, schema } from "@/lib/db";
 
 export const runtime = "nodejs";
 
 /** Merge tag `id` into `intoTagId`: reassign its contacts, then delete it. */
-export async function POST(
+export const POST = handleApi(async (
   req: Request,
   context: { params: Promise<{ id: string }> },
-) {
-  const user = await requireUser();
+) => {
+  const user = await requireUserApi();
   const { id } = await context.params;
   const { intoTagId } = (await req.json()) as { intoTagId?: string };
   if (!intoTagId || intoTagId === id) {
-    return NextResponse.json({ error: "bad_target" }, { status: 400 });
+    throw new ApiError("bad_target", 400);
   }
 
   const owned = await db
@@ -28,7 +28,7 @@ export async function POST(
       ),
     );
   if (owned.length !== 2) {
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
+    throw new ApiError("not_found", 404);
   }
 
   const srcRows = await db
@@ -48,4 +48,4 @@ export async function POST(
     .where(and(eq(schema.tags.id, id), eq(schema.tags.userId, user.id)));
 
   return NextResponse.json({ merged: srcRows.length });
-}
+});

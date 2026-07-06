@@ -7,10 +7,10 @@
  * Refs: ROADMAP M2.3
  */
 import { google } from "googleapis";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { rawContacts, oauthTokens, sources } from "@/db/schema";
-import { clientFromTokens } from "@/lib/google";
+import { rawContacts, sources } from "@/db/schema";
+import { clientFromTokens, getTokenForSource } from "@/lib/google";
 import { runImport, type ImportCounters } from "./run";
 
 const PERSON_FIELDS = [
@@ -101,13 +101,13 @@ export async function syncGoogleContacts(sourceId: string) {
                 updatedAt: new Date(),
               },
             })
-            .returning({ id: rawContacts.id, createdAt: rawContacts.createdAt });
+            .returning({
+              id: rawContacts.id,
+              inserted: sql<boolean>`(xmax = 0)`,
+            });
 
           if (upserted[0]) {
-            const wasNew =
-              upserted[0].createdAt &&
-              Date.now() - upserted[0].createdAt.getTime() < 5_000;
-            if (wasNew) counters.recordsNew += 1;
+            if (upserted[0].inserted) counters.recordsNew += 1;
             else counters.recordsUpdated += 1;
           }
         }
@@ -117,33 +117,11 @@ export async function syncGoogleContacts(sourceId: string) {
   });
 }
 
-async function getTokenForSource(sourceId: string) {
-  const [token] = await db
-    .select()
-    .from(oauthTokens)
-    .where(eq(oauthTokens.sourceId, sourceId))
-    .limit(1);
-  if (!token) throw new Error(`No OAuth token for source ${sourceId}`);
-  return {
-    accessToken: token.accessToken,
-    refreshToken: token.refreshToken,
-    expiresAt: token.expiresAt,
-    scopes: token.scopes,
-  };
-}
-
 /**
  * Resolve a (userId, "google_contacts") pair to its sourceId.
  * Throws if not connected.
  */
 export async function getGoogleContactsSourceId(userId: string): Promise<string> {
-  const [src] = await db
-    .select({ id: sources.id })
-    .from(sources)
-    .where(eq(sources.userId, userId))
-    .limit(50); // we'll filter in JS — only ~3 google rows per user
-  void src; // not used; full filter below
-
   const allRows = await db.select().from(sources).where(eq(sources.userId, userId));
   const found = allRows.find((s) => s.kind === "google_contacts");
   if (!found) throw new Error("google_contacts source not connected");

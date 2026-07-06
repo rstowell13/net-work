@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 import { asc, eq } from "drizzle-orm";
-import { requireUser } from "@/lib/auth";
+import { ApiError, handleApi, requireUserApi } from "@/lib/api";
 import { db, schema } from "@/lib/db";
 import { normalizeHandle } from "@/lib/handles";
 
 export const runtime = "nodejs";
 
-export async function GET(
+export const GET = handleApi(async (
   _req: Request,
   context: { params: Promise<{ kind: string; id: string }> },
-) {
-  const user = await requireUser();
+) => {
+  const user = await requireUserApi();
   const { kind, id } = await context.params;
 
   if (kind === "message") {
@@ -19,8 +19,7 @@ export async function GET(
       .from(schema.messageThreads)
       .where(eq(schema.messageThreads.id, id))
       .limit(1);
-    if (!thread)
-      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    if (!thread) throw new ApiError("not_found", 404);
     const msgs = await db
       .select({
         id: schema.messages.id,
@@ -90,8 +89,7 @@ export async function GET(
       .from(schema.emailThreads)
       .where(eq(schema.emailThreads.id, id))
       .limit(1);
-    if (!thread)
-      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    if (!thread) throw new ApiError("not_found", 404);
     const ems = await db
       .select({
         id: schema.emails.id,
@@ -112,5 +110,5 @@ export async function GET(
     });
   }
 
-  return NextResponse.json({ error: "bad_kind" }, { status: 400 });
-}
+  throw new ApiError("bad_kind", 400);
+});

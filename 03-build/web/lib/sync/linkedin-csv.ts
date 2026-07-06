@@ -37,7 +37,7 @@ export type ParseResult = {
 export function parseLinkedinCsv(text: string): ParseResult {
   // Find the line that starts with "First Name,"
   const lines = text.split(/\r?\n/);
-  let headerLineIdx = lines.findIndex((l) =>
+  const headerLineIdx = lines.findIndex((l) =>
     l.toLowerCase().startsWith("first name,"),
   );
   if (headerLineIdx === -1) {

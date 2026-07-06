@@ -1,8 +1,14 @@
 import "server-only";
-import { createHash } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { chat, LLMConfigError } from "./client";
+import { fmtDate } from "@/lib/format-time";
+import {
+  hashStalenessKey,
+  type SummaryStalenessKey,
+} from "./summary-staleness";
+
+export type { SummaryStalenessKey } from "./summary-staleness";
 
 const SYSTEM_PROMPT_RELATIONSHIP = [
   "TASK: Write 150–300 characters about this specific person — who they are to the user, what shared context the two of you have, and what the relationship has been about. Output the text only; no preface, no greeting, no headers.",
@@ -72,12 +78,13 @@ export interface RelationshipInputs {
 const RAW_BODY_BUDGET = 60000;
 const MAX_ITEM_BODY = 12000;
 
-function hashInputs(inputs: RelationshipInputs): string {
-  return createHash("sha1")
-    .update(JSON.stringify(inputs))
-    .digest("hex")
-    .slice(0, 16);
-}
+// Cache-validity key: see lib/llm/summary-staleness.ts for the hash and its
+// intentional-narrowing rationale, and lib/diary.ts
+// getRelationshipStalenessInputs for how it's computed (one cheap aggregate
+// query — counts + max(sent_at), no message/email bodies) — instead of the
+// previous approach, which hashed the FULL RelationshipInputs (up to 4,000
+// full message/email bodies) and so had to hydrate them on every page view
+// just to check the cache.
 
 type RawItem =
   | {
@@ -95,10 +102,6 @@ type RawItem =
       body: string | null;
       threadId: string | null;
     };
-
-function fmtDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
 
 function renderRelationshipUserMsg(i: RelationshipInputs): string {
   const lines: string[] = [];
@@ -236,40 +239,54 @@ function renderRelationshipUserMsg(i: RelationshipInputs): string {
   return lines.join("\n");
 }
 
-export async function getOrGenerateRelationshipSummary(
-  contactId: string,
-  inputs: RelationshipInputs,
-  opts: { force?: boolean } = {},
-): Promise<{
+export type RelationshipSummaryResult = {
   body: string;
   model: string;
   generatedAt: Date;
   cached: boolean;
-} | null> {
-  const inputsHash = hashInputs(inputs);
+};
 
-  if (!opts.force) {
-    const [existing] = await db
-      .select()
-      .from(schema.relationshipSummaries)
-      .where(
-        and(
-          eq(schema.relationshipSummaries.contactId, contactId),
-          eq(schema.relationshipSummaries.inputsHash, inputsHash),
-        ),
-      )
-      .orderBy(desc(schema.relationshipSummaries.generatedAt))
-      .limit(1);
-    if (existing) {
-      return {
-        body: existing.body,
-        model: existing.model,
-        generatedAt: existing.generatedAt,
-        cached: true,
-      };
-    }
-  }
+/**
+ * Cheap cache check — looks up a cached summary by the hash of the cheap
+ * staleness key (counts + max(sent_at), no bodies). Callers should try this
+ * first and only fetch full RelationshipInputs (message/email bodies) on a
+ * miss, via generateRelationshipSummary.
+ */
+export async function getCachedRelationshipSummary(
+  contactId: string,
+  stalenessKey: SummaryStalenessKey,
+): Promise<RelationshipSummaryResult | null> {
+  const inputsHash = hashStalenessKey(stalenessKey);
+  const [existing] = await db
+    .select()
+    .from(schema.relationshipSummaries)
+    .where(
+      and(
+        eq(schema.relationshipSummaries.contactId, contactId),
+        eq(schema.relationshipSummaries.inputsHash, inputsHash),
+      ),
+    )
+    .orderBy(desc(schema.relationshipSummaries.generatedAt))
+    .limit(1);
+  if (!existing) return null;
+  return {
+    body: existing.body,
+    model: existing.model,
+    generatedAt: existing.generatedAt,
+    cached: true,
+  };
+}
 
+/**
+ * Generates (and caches) a fresh relationship summary. Requires the full
+ * RelationshipInputs (message/email bodies) — only fetch those on a cache
+ * miss or forced regeneration; see getCachedRelationshipSummary.
+ */
+export async function generateRelationshipSummary(
+  contactId: string,
+  inputs: RelationshipInputs,
+  stalenessKey: SummaryStalenessKey,
+): Promise<RelationshipSummaryResult | null> {
   let result;
   try {
     result = await chat(
@@ -290,7 +307,7 @@ export async function getOrGenerateRelationshipSummary(
       contactId,
       body: result.text,
       model: result.model,
-      inputsHash,
+      inputsHash: hashStalenessKey(stalenessKey),
     })
     .returning();
   return {

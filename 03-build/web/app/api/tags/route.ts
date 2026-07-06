@@ -1,22 +1,22 @@
 import { NextResponse } from "next/server";
 import { and, eq, isNull } from "drizzle-orm";
-import { requireUser } from "@/lib/auth";
+import { ApiError, handleApi, requireUserApi } from "@/lib/api";
 import { db, schema } from "@/lib/db";
 import { listTags } from "@/lib/tags/queries";
 import { normalizeTagName, nextTagColor, TAG_PALETTE } from "@/lib/tags/colors";
 
 export const runtime = "nodejs";
 
-export async function GET() {
-  const user = await requireUser();
+export const GET = handleApi(async () => {
+  const user = await requireUserApi();
   return NextResponse.json(await listTags(user.id));
-}
+});
 
-export async function POST(req: Request) {
-  const user = await requireUser();
+export const POST = handleApi(async (req: Request) => {
+  const user = await requireUserApi();
   const body = (await req.json()) as { name?: string; color?: string };
   const name = normalizeTagName(body?.name ?? "");
-  if (!name) return NextResponse.json({ error: "empty_name" }, { status: 400 });
+  if (!name) throw new ApiError("empty_name", 400);
 
   // Reuse an existing tag (case-insensitive) instead of creating a near-duplicate.
   const existing = await db
@@ -38,4 +38,4 @@ export async function POST(req: Request) {
     .values({ userId: user.id, name, color })
     .returning();
   return NextResponse.json(created);
-}
+});

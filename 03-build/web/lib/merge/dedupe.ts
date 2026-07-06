@@ -11,7 +11,7 @@ import "server-only";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { getSelfEmails } from "@/lib/relink";
-import { groupDuplicates, groupKey } from "./grouping";
+import { groupDuplicates, suppressionPairs } from "./grouping";
 
 export interface DedupeStats {
   candidatesCreated: number;
@@ -67,15 +67,19 @@ export async function runDedupe(userId: string): Promise<DedupeStats> {
         inArray(schema.mergeCandidates.status, ["split", "skipped"]),
       ),
     );
-  const suppressedKeys = new Set<string>();
-  for (const c of reviewed) suppressedKeys.add(groupKey(c.rawContactIds));
+  // Pair-level suppression: a rejected group blocks its member PAIRS, not just
+  // the exact id-set — so the group can't resurface when a new record joins the
+  // cluster (the pre-2026-07 set-key behavior let exactly that happen).
+  const suppressedPairs = suppressionPairs(
+    reviewed.map((c) => c.rawContactIds),
+  );
 
   // The user's own addresses must never be a match key — the user's email is in
   // the From/To of nearly every message, so indexing it would glue the user's
   // own saved contact onto huge swaths of the address book.
   const selfEmails = await getSelfEmails(userId);
 
-  const groups = groupDuplicates(raws, selfEmails, suppressedKeys);
+  const groups = groupDuplicates(raws, selfEmails, suppressedPairs);
 
   const stats: DedupeStats = {
     candidatesCreated: groups.length,

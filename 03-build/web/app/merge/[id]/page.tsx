@@ -2,10 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, eq, inArray } from "drizzle-orm";
 import { AppShell } from "@/components/AppShell";
+import { Avatar } from "@/components/Avatar";
 import { requireUser } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
-import { avatarColorVar, initials } from "@/lib/merge/avatar-color";
-import { pickSurvivor } from "@/lib/merge/apply";
+import { pickSurvivor } from "@/lib/merge/survivor";
 import { AmbiguousActions } from "@/components/merge/MergeActions";
 import { PartitionEditor } from "@/components/merge/PartitionEditor";
 
@@ -205,19 +205,7 @@ export default async function MergeDetailPage({
                 </td>
                 {members.map((m) => (
                   <td key={m.id} className="py-3 pr-4" style={{ borderBottom: "1px solid var(--rule)" }}>
-                    <div
-                      className="flex items-center justify-center rounded-full italic"
-                      style={{
-                        width: 36,
-                        height: 36,
-                        color: "var(--stone)",
-                        fontFamily:
-                          "var(--font-serif, 'Source Serif 4'), Georgia, serif",
-                        background: avatarColorVar(m.id),
-                      }}
-                    >
-                      {initials(m.name)}
-                    </div>
+                    <Avatar id={m.id} name={m.name} photoUrl={m.avatarUrl} size="sm" />
                   </td>
                 ))}
               </tr>

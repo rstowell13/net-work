@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { and, eq, inArray } from "drizzle-orm";
-import { requireUser } from "@/lib/auth";
+import { handleApi, requireUserApi } from "@/lib/api";
 import { db, schema } from "@/lib/db";
 import { bulkApply } from "@/lib/merge/apply";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export async function POST(req: Request) {
-  const user = await requireUser();
+export const POST = handleApi(async (req: Request) => {
+  const user = await requireUserApi();
   const body = (await req.json().catch(() => ({}))) as {
     candidateIds?: string[];
     confidences?: Array<"exact" | "high" | "ambiguous">;
@@ -34,4 +34,4 @@ export async function POST(req: Request) {
   // small chunks and calls /api/merge/relink once at the end (one global pass).
   const result = await bulkApply(user.id, ids, { relink: false });
   return NextResponse.json({ requested: ids.length, ...result });
-}
+});

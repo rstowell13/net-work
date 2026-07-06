@@ -63,18 +63,61 @@ export interface DedupeGroup {
  * contact's own records. Two+ saved contacts stay auto/bulk-mergeable only when
  * a real identifier is shared across them (see below).
  */
-/** Stable key for a candidate group — lets a re-scan skip a group the user split. */
-export function groupKey(rawContactIds: string[]): string {
-  return [...rawContactIds].sort().join(",");
+/** Stable key for an unordered pair of raw-record ids. */
+export function pairKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+/**
+ * Expand user-rejected groups (split/skipped candidates) into pairwise
+ * "raw A must not merge with raw B" edges. Pair-level suppression survives
+ * cluster growth: when a new record later joins the same cluster, the exact
+ * id-set changes but the rejected pairs still hold, so the group the user
+ * split can't resurface wholesale — only genuinely new evidence (an edge
+ * involving the new record) can form a new candidate.
+ */
+export function suppressionPairs(rejectedGroups: string[][]): Set<string> {
+  const pairs = new Set<string>();
+  for (const ids of rejectedGroups) {
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        pairs.add(pairKey(ids[i], ids[j]));
+      }
+    }
+  }
+  return pairs;
 }
 
 export function groupDuplicates(
   rows: DedupeRawInput[],
   selfEmails: Set<string> = new Set(),
-  suppressedKeys: Set<string> = new Set(),
+  suppressedPairs: Set<string> = new Set(),
 ): DedupeGroup[] {
   const uf = new UnionFind();
   rows.forEach((r) => uf.add(r.id));
+
+  // Ids that appear in ANY suppressed pair — fast path: key lists that touch
+  // none of these can star-union in O(n) instead of checking every pair.
+  const suppressedIds = new Set<string>();
+  for (const k of suppressedPairs) {
+    const [a, b] = k.split("|");
+    suppressedIds.add(a);
+    suppressedIds.add(b);
+  }
+  const unionRespectingSuppression = (ids: string[]) => {
+    if (ids.length < 2) return;
+    if (!ids.some((id) => suppressedIds.has(id))) {
+      for (let i = 1; i < ids.length; i++) uf.union(ids[0], ids[i]);
+      return;
+    }
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        if (!suppressedPairs.has(pairKey(ids[i], ids[j]))) {
+          uf.union(ids[i], ids[j]);
+        }
+      }
+    }
+  };
 
   const indexBy = (
     key: string,
@@ -119,14 +162,16 @@ export function groupDuplicates(
   }
 
   for (const ids of map.values()) {
-    for (let i = 1; i < ids.length; i++) uf.union(ids[0], ids[i]);
+    unionRespectingSuppression(ids);
   }
 
   // Bridge each email-parsed name only to records that carry it as a real name.
   for (const { id, key } of emailNameKeys) {
     const owners = realNameKeyOwners.get(key);
     if (!owners) continue;
-    for (const o of owners) if (o !== id) uf.union(id, o);
+    for (const o of owners) {
+      if (o !== id && !suppressedPairs.has(pairKey(id, o))) uf.union(id, o);
+    }
   }
 
   const groups = new Map<string, string[]>();
@@ -141,8 +186,6 @@ export function groupDuplicates(
   const out: DedupeGroup[] = [];
   for (const ids of groups.values()) {
     if (ids.length < 2) continue;
-    // A group the user already split (declared "not the same") must not return.
-    if (suppressedKeys.has(groupKey(ids))) continue;
     const memberRows = ids.map((id) => byId.get(id)!);
 
     // How many distinct saved contacts does this group span?
@@ -158,6 +201,24 @@ export function groupDuplicates(
     if (!result) continue;
 
     let confidence = result.confidence;
+    // A new record can transitively bridge a rejected pair back into one group
+    // (suppression blocks direct edges, not paths through fresh evidence).
+    // Surface it — the new member may be a real duplicate — but never above
+    // "ambiguous": the user already said the rejected pair isn't the same
+    // person, so re-merging them must take an explicit human decision.
+    let containsRejectedPair = false;
+    if (suppressedPairs.size > 0) {
+      outer: for (let i = 0; i < ids.length; i++) {
+        if (!suppressedIds.has(ids[i])) continue;
+        for (let j = i + 1; j < ids.length; j++) {
+          if (suppressedPairs.has(pairKey(ids[i], ids[j]))) {
+            containsRejectedPair = true;
+            break outer;
+          }
+        }
+      }
+    }
+    if (containsRejectedPair) confidence = "ambiguous";
     // Merging two+ already-saved contacts is consequential (one gets
     // soft-deleted). Only auto/bulk-merge them when a real identifier
     // (email/phone/LinkedIn) is shared ACROSS the distinct contacts. If their
@@ -183,7 +244,13 @@ export function groupDuplicates(
       if (!sharedAcrossContacts) confidence = "ambiguous";
     }
 
-    out.push({ rawContactIds: ids, confidence, signals: result.signals });
+    out.push({
+      rawContactIds: ids,
+      confidence,
+      signals: containsRejectedPair
+        ? { ...result.signals, containsRejectedPair }
+        : result.signals,
+    });
   }
   return out;
 }

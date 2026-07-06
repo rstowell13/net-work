@@ -7,71 +7,37 @@
  *
  * Bearer-token auth via the AgentToken table (SHA-256 of the plaintext).
  *
+ * The actual ingest pipelines (contacts/messages/calls) live in
+ * lib/sync/mac-agent.ts — this file is just auth, validation, dispatch,
+ * and the post-ingest bookkeeping.
+ *
  * Refs: ROADMAP M3.6
  */
 import { NextResponse } from "next/server";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import {
-  rawContacts,
-  messages,
-  messageThreads,
-  callLogs,
-  sources,
-} from "@/db/schema";
+import { sources } from "@/db/schema";
 import { validateAgentToken } from "@/lib/agent-token";
 import { runImport } from "@/lib/sync/run";
-import { relinkAfterMerge } from "@/lib/relink";
-import { normalizeHandle } from "@/lib/handles";
+import {
+  relinkAfterMerge,
+  relinkCallsByHandles,
+  relinkThreadsByHandles,
+} from "@/lib/relink";
+import {
+  ingestContacts,
+  ingestMessages,
+  ingestCalls,
+  type AppleContactRow,
+  type IMessageRow,
+  type IMessageThread,
+  type CallRow,
+} from "@/lib/sync/mac-agent";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const SUPPORTED = new Set(["contacts", "messages", "calls"]);
-
-type AppleContactRow = {
-  external_id: string;
-  name: string | null;
-  organization: string | null;
-  emails: string[];
-  phones: string[];
-  linkedin_url: string | null;
-  photo_b64: string | null;
-};
-
-type IMessageRow = {
-  rowid: number;
-  external_id: string;
-  handle: string;
-  body: string;
-  sent_at_ms: number;
-  direction: "inbound" | "outbound";
-  channel: "imessage" | "sms";
-  is_group?: boolean;
-  sender_handle?: string | null;
-};
-
-type IMessageThread = {
-  external_thread_id: string;
-  handle: string | null;
-  started_at_ms: number;
-  ended_at_ms: number;
-  message_count: number;
-  message_external_ids: string[];
-  is_group?: boolean;
-  group_chat_id?: string | null;
-  group_display_name?: string | null;
-  participant_handles?: string[];
-};
-
-type CallRow = {
-  z_date: number;
-  external_id: string;
-  handle: string;
-  started_at_ms: number;
-  duration_seconds: number;
-  direction: "inbound" | "outbound" | "missed";
-};
 
 export async function POST(
   request: Request,
@@ -125,11 +91,13 @@ export async function POST(
       .where(eq(sources.id, sourceId));
   }
 
-  // After messages or contacts ingest, relink dangling diary rows so the
-  // diary view actually shows the new data. Idempotent + bounded by the
-  // count of NULL-contact_id rows, so cheap once steady-state. Swallow
-  // errors — a slow relink must never fail the ingest.
-  if (result.status === "success" && (kind === "messages" || kind === "contacts")) {
+  // After ingest, relink dangling diary rows so the diary view actually
+  // shows the new data. Messages and calls batches (many per night) get a
+  // relink SCOPED to the batch's handles — the global scan used to run once
+  // per batch and never shrank. Contacts batches (few, and their new
+  // handles can claim OLD dangling rows anywhere) keep the global pass.
+  // Swallow errors — a slow relink must never fail the ingest.
+  if (result.status === "success") {
     try {
       const src = await db
         .select({ userId: sources.userId })
@@ -137,7 +105,24 @@ export async function POST(
         .where(eq(sources.id, sourceId))
         .limit(1);
       if (src[0]?.userId) {
-        await relinkAfterMerge(src[0].userId);
+        if (kind === "messages") {
+          const groups = body.batch as { threads?: IMessageThread[] }[];
+          const batchHandles = groups.flatMap(
+            (g) => g.threads?.map((t) => t.handle) ?? [],
+          );
+          await relinkThreadsByHandles(
+            src[0].userId,
+            batchHandles.filter((h): h is string => !!h),
+          );
+        } else if (kind === "calls") {
+          const calls = body.batch as { handle?: string | null }[];
+          await relinkCallsByHandles(
+            src[0].userId,
+            calls.map((c) => c.handle).filter((h): h is string => !!h),
+          );
+        } else {
+          await relinkAfterMerge(src[0].userId);
+        }
       }
     } catch (err) {
       console.error("post-ingest relink failed", err);
@@ -145,222 +130,4 @@ export async function POST(
   }
 
   return NextResponse.json(result);
-}
-
-// ============================================================
-// Apple Contacts
-// ============================================================
-
-async function ingestContacts(
-  sourceId: string,
-  batch: AppleContactRow[],
-  counters: { recordsSeen: number; recordsNew: number; recordsUpdated: number },
-) {
-  for (const c of batch) {
-    counters.recordsSeen += 1;
-    if (!c.external_id) continue;
-    // Store the resized photo as a data: URL so the avatar component can
-    // render it directly. ~25KB per contact at 256x256 JPEG.
-    const avatarUrl = c.photo_b64
-      ? `data:image/jpeg;base64,${c.photo_b64}`
-      : null;
-    const upserted = await db
-      .insert(rawContacts)
-      .values({
-        sourceId,
-        externalId: c.external_id,
-        payload: c as unknown as Record<string, unknown>,
-        name: c.name ?? c.organization ?? null,
-        emails: c.emails.map((e) => e.toLowerCase()),
-        phones: c.phones,
-        linkedinUrl: c.linkedin_url,
-        avatarUrl,
-      })
-      .onConflictDoUpdate({
-        target: [rawContacts.sourceId, rawContacts.externalId],
-        set: {
-          payload: c as unknown as Record<string, unknown>,
-          name: c.name ?? c.organization ?? null,
-          emails: c.emails.map((e) => e.toLowerCase()),
-          phones: c.phones,
-          linkedinUrl: c.linkedin_url,
-          avatarUrl,
-          updatedAt: new Date(),
-        },
-      })
-      .returning({ id: rawContacts.id, createdAt: rawContacts.createdAt });
-    if (upserted[0]?.createdAt && Date.now() - upserted[0].createdAt.getTime() < 5_000) {
-      counters.recordsNew += 1;
-    } else {
-      counters.recordsUpdated += 1;
-    }
-  }
-}
-
-// ============================================================
-// iMessage / SMS
-// ============================================================
-
-async function ingestMessages(
-  sourceId: string,
-  payloads: { messages: IMessageRow[]; threads: IMessageThread[] }[],
-  counters: { recordsSeen: number; recordsNew: number; recordsUpdated: number },
-) {
-  // Flatten the batch
-  const allMessages: IMessageRow[] = [];
-  const threadMap = new Map<string, IMessageThread>();
-  for (const p of payloads) {
-    for (const m of p.messages) allMessages.push(m);
-    for (const t of p.threads) threadMap.set(t.external_thread_id, t);
-  }
-
-  // Step 1: upsert handles as raw_contacts (one per unique handle)
-  const uniqueHandles = new Set(allMessages.map((m) => m.handle).filter(Boolean));
-  const handleToRawId = new Map<string, string>();
-  for (const handle of uniqueHandles) {
-    const isEmail = handle.includes("@");
-    const upserted = await db
-      .insert(rawContacts)
-      .values({
-        sourceId,
-        externalId: handle, // handle is the raw_contact external_id for mac_agent
-        payload: { source: "mac_agent_imessage", handle } as Record<string, unknown>,
-        name: null,
-        emails: isEmail ? [handle.toLowerCase()] : [],
-        phones: isEmail ? [] : [handle],
-        linkedinUrl: null,
-        avatarUrl: null,
-      })
-      .onConflictDoUpdate({
-        target: [rawContacts.sourceId, rawContacts.externalId],
-        set: { updatedAt: new Date() },
-      })
-      .returning({ id: rawContacts.id });
-    if (upserted[0]) handleToRawId.set(handle, upserted[0].id);
-  }
-
-  // Step 2: upsert MessageThreads (no contactId yet — populated post-merge
-  // by lib/relink.ts). Dedupe by external_thread_id.
-  const threadIdMap = new Map<string, string>(); // external_thread_id -> uuid
-  for (const t of threadMap.values()) {
-    const startedAt = new Date(t.started_at_ms);
-    const endedAt = new Date(t.ended_at_ms);
-    const isGroup = t.is_group ?? false;
-    // Group threads have no single handle — they match contacts at read time via
-    // the normalized participant roster (see lib/diary.ts).
-    const handle = isGroup ? null : t.handle ?? null;
-    const groupChatId = isGroup ? t.group_chat_id ?? null : null;
-    const groupDisplayName = isGroup ? t.group_display_name ?? null : null;
-    const participantHandles = isGroup
-      ? Array.from(
-          new Set(
-            (t.participant_handles ?? [])
-              .map(normalizeHandle)
-              .filter((h): h is string => h !== null),
-          ),
-        )
-      : null;
-    const inserted = await db
-      .insert(messageThreads)
-      .values({
-        externalThreadId: t.external_thread_id,
-        handle,
-        startedAt,
-        endedAt,
-        messageCount: t.message_count,
-        isGroup,
-        groupChatId,
-        groupDisplayName,
-        participantHandles,
-      })
-      .onConflictDoUpdate({
-        target: messageThreads.externalThreadId,
-        set: {
-          handle,
-          startedAt,
-          endedAt,
-          messageCount: t.message_count,
-          isGroup,
-          groupChatId,
-          groupDisplayName,
-          participantHandles,
-          updatedAt: new Date(),
-        },
-      })
-      .returning({ id: messageThreads.id });
-    threadIdMap.set(t.external_thread_id, inserted[0].id);
-    counters.recordsNew += 1;
-  }
-
-  // Step 3: upsert Messages (channel + direction + body)
-  for (const m of allMessages) {
-    counters.recordsSeen += 1;
-    // Find the thread this message belongs to by scanning threadMap
-    let threadUuid: string | null = null;
-    for (const [extId, t] of threadMap) {
-      if (t.message_external_ids.includes(m.external_id)) {
-        threadUuid = threadIdMap.get(extId) ?? null;
-        break;
-      }
-    }
-    await db
-      .insert(messages)
-      .values({
-        threadId: threadUuid,
-        externalId: m.external_id,
-        direction: m.direction,
-        sentAt: new Date(m.sent_at_ms),
-        body: m.body.slice(0, 8192),
-        channel: m.channel,
-        isGroup: m.is_group ?? false,
-        senderHandle: m.sender_handle ?? null,
-      })
-      .onConflictDoUpdate({
-        target: messages.externalId,
-        set: {
-          threadId: threadUuid,
-          direction: m.direction,
-          sentAt: new Date(m.sent_at_ms),
-          body: m.body.slice(0, 8192),
-          channel: m.channel,
-          isGroup: m.is_group ?? false,
-          senderHandle: m.sender_handle ?? null,
-        },
-      });
-  }
-}
-
-// ============================================================
-// Call History
-// ============================================================
-
-async function ingestCalls(
-  batch: CallRow[],
-  counters: { recordsSeen: number; recordsNew: number; recordsUpdated: number },
-) {
-  const rows = batch
-    .filter((c) => c.external_id)
-    .map((c) => ({
-      externalId: c.external_id,
-      handle: c.handle ?? null,
-      direction: c.direction,
-      startedAt: new Date(c.started_at_ms),
-      durationSeconds: c.duration_seconds,
-    }));
-  counters.recordsSeen += batch.length;
-  if (rows.length === 0) return;
-  // Single multi-row upsert — row-by-row was too slow over Supabase.
-  await db
-    .insert(callLogs)
-    .values(rows)
-    .onConflictDoUpdate({
-      target: callLogs.externalId,
-      set: {
-        handle: sql`excluded.handle`,
-        direction: sql`excluded.direction`,
-        startedAt: sql`excluded.started_at`,
-        durationSeconds: sql`excluded.duration_seconds`,
-      },
-    });
-  counters.recordsNew += rows.length;
 }

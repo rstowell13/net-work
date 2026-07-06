@@ -31,9 +31,30 @@ describe("nextSyncTarget", () => {
     const t = nextSyncTarget([
       s({ id: "g", kind: "gmail", backfillComplete: true }),
       s({ id: "c", kind: "google_contacts", lastSyncAt: new Date() }),
-      s({ id: "cal", kind: "google_calendar", lastSyncAt: new Date() }),
+      s({
+        id: "cal",
+        kind: "google_calendar",
+        backfillComplete: true,
+        lastSyncAt: new Date(),
+      }),
     ]);
     expect(t).toBeNull();
+  });
+
+  it("keeps selecting a calendar mid-backfill even after it has synced once", () => {
+    // Regression: calendar syncs are time-budgeted (12s chunks). A bailed
+    // pass stamps lastSyncAt, and the old never-synced-only rule then
+    // ignored the source forever — backfill stalled at the oldest chunk.
+    const t = nextSyncTarget([
+      s({ id: "g", kind: "gmail", backfillComplete: true }),
+      s({
+        id: "cal",
+        kind: "google_calendar",
+        backfillComplete: false,
+        lastSyncAt: new Date(),
+      }),
+    ]);
+    expect(t?.id).toBe("cal");
   });
 
   it("skips a dead (needs_reauth) Gmail source so it doesn't block forever", () => {

@@ -1,31 +1,23 @@
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
-import { requireUser } from "@/lib/auth";
+import { ApiError, handleApi, requireOwnedContact, requireUserApi } from "@/lib/api";
 import { db, schema } from "@/lib/db";
 
 export const runtime = "nodejs";
 
-export async function POST(
+export const POST = handleApi(async (
   req: Request,
   context: { params: Promise<{ id: string }> },
-) {
-  const user = await requireUser();
+) => {
+  const user = await requireUserApi();
   const { id } = await context.params;
   const body = (await req.json()) as { body?: string };
-  if (!body?.body?.trim())
-    return NextResponse.json({ error: "empty" }, { status: 400 });
+  if (!body?.body?.trim()) throw new ApiError("empty", 400);
 
-  const [contact] = await db
-    .select({ id: schema.contacts.id })
-    .from(schema.contacts)
-    .where(and(eq(schema.contacts.id, id), eq(schema.contacts.userId, user.id)))
-    .limit(1);
-  if (!contact)
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  await requireOwnedContact(user.id, id);
 
   const [created] = await db
     .insert(schema.notes)
     .values({ contactId: id, body: body.body.trim() })
     .returning();
   return NextResponse.json(created);
-}
+});

@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { FreshnessRing } from "@/components/FreshnessRing";
+import { SourceChip } from "@/components/SourceChip";
 import { bandColor, bandLabel, type FreshnessResult } from "@/lib/scoring/freshness";
 
 export interface HomePlanItem {
@@ -88,15 +89,7 @@ export function PlanCard({ item }: { item: HomePlanItem }) {
           >
             {item.category && (
               <>
-                <span
-                  className="rounded px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.04em]"
-                  style={{
-                    background: "var(--stone-sunken)",
-                    color: "var(--ink-muted)",
-                  }}
-                >
-                  {item.category}
-                </span>
+                <SourceChip label={item.category} />
                 <Dot />
               </>
             )}

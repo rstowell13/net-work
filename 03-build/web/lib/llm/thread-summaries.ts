@@ -1,29 +1,46 @@
 import "server-only";
 import { asc, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
+import { fmtTime } from "@/lib/format-time";
 import { summarizeThread } from "./summary";
 
 const TRANSCRIPT_CHAR_LIMIT = 8000;
 
-function fmtTime(d: Date): string {
-  return d.toISOString().slice(0, 16).replace("T", " ");
+/**
+ * Shared trim-loop/char-budget transcript builder for both message threads
+ * and email threads — only the line separator, per-body truncation, and
+ * optional subject header differ between the two.
+ */
+function buildTranscript<
+  T extends { sentAt: Date; direction: string; body: string | null },
+>(
+  items: T[],
+  opts: {
+    separator: string;
+    bodyLimit?: number;
+    header?: string;
+  } = { separator: "\n" },
+): string {
+  const { separator, bodyLimit, header = "" } = opts;
+  const lines = items.map((item) => {
+    const rawBody = (item.body ?? "").trim();
+    const body = bodyLimit ? rawBody.slice(0, bodyLimit) : rawBody;
+    return `[${item.direction === "outbound" ? "Out" : "In"} ${fmtTime(
+      item.sentAt,
+    )}] ${body || "(empty)"}`;
+  });
+  let out = lines.join(separator);
+  while (header.length + out.length > TRANSCRIPT_CHAR_LIMIT && lines.length > 1) {
+    lines.shift();
+    out = lines.join(separator);
+  }
+  return header + out;
 }
 
 function buildMessageTranscript(
   messages: Array<{ sentAt: Date; direction: string; body: string | null }>,
 ): string {
-  const lines = messages.map(
-    (m) =>
-      `[${m.direction === "outbound" ? "Out" : "In"} ${fmtTime(m.sentAt)}] ${
-        (m.body ?? "").trim() || "(empty)"
-      }`,
-  );
-  let out = lines.join("\n");
-  while (out.length > TRANSCRIPT_CHAR_LIMIT && lines.length > 1) {
-    lines.shift();
-    out = lines.join("\n");
-  }
-  return out;
+  return buildTranscript(messages, { separator: "\n" });
 }
 
 function buildEmailTranscript(
@@ -36,18 +53,7 @@ function buildEmailTranscript(
 ): string {
   const subject = emails[0]?.subject?.trim();
   const header = subject ? `Subject: ${subject}\n\n` : "";
-  const lines = emails.map(
-    (e) =>
-      `[${e.direction === "outgoing" ? "Out" : "In"} ${fmtTime(e.sentAt)}] ${
-        (e.body ?? "").trim().slice(0, 1500) || "(empty)"
-      }`,
-  );
-  let body = lines.join("\n\n");
-  while (header.length + body.length > TRANSCRIPT_CHAR_LIMIT && lines.length > 1) {
-    lines.shift();
-    body = lines.join("\n\n");
-  }
-  return header + body;
+  return buildTranscript(emails, { separator: "\n\n", bodyLimit: 1500, header });
 }
 
 export async function ensureMessageThreadSummary(

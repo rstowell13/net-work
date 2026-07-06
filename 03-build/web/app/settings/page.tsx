@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { PageContainer } from "@/components/PageContainer";
 
 export default function SettingsPage() {
   return (
     <AppShell active="/settings">
-      <div className="mx-auto max-w-[760px] px-4 pb-24 pt-6 md:px-14 md:pb-16 md:pt-8">
+      <PageContainer>
         <h1
           className="m-0 mb-8"
           style={{
@@ -40,7 +41,7 @@ export default function SettingsPage() {
             desc="Create, color, merge, and delete your custom tags."
           />
         </div>
-      </div>
+      </PageContainer>
     </AppShell>
   );
 }

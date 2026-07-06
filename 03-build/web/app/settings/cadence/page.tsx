@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { PageContainer } from "@/components/PageContainer";
 import { CadenceForm } from "@/components/CadenceForm";
 import { TagCadenceForm } from "@/components/TagCadenceForm";
 import { requireUser } from "@/lib/auth";
@@ -26,7 +27,7 @@ export default async function CadencePage() {
   }));
   return (
     <AppShell active="/settings">
-      <div className="mx-auto max-w-[760px] px-4 pb-24 pt-6 md:px-14 md:pb-16 md:pt-8">
+      <PageContainer>
         <p
           className="mb-2 text-[12px]"
           style={{ color: "var(--ink-faint)" }}
@@ -85,7 +86,7 @@ export default async function CadencePage() {
           </p>
           <TagCadenceForm tags={tags} goals={goals} />
         </div>
-      </div>
+      </PageContainer>
     </AppShell>
   );
 }

@@ -53,13 +53,22 @@ async function loadGoogleSources(userId: string) {
 
 export async function runRebuildPass(userId: string): Promise<RebuildPass> {
   const rows = await loadGoogleSources(userId);
+  // Backfill progress lives under a per-kind config key: gmail uses
+  // `backfill_complete`, calendar uses `calendar_backfill_complete`
+  // (lib/sync/calendar-watermark.ts). Contacts has no chunked backfill.
+  const backfillComplete = (kind: string, cfg: unknown): boolean => {
+    const c = cfg as {
+      backfill_complete?: boolean;
+      calendar_backfill_complete?: boolean;
+    } | null;
+    if (kind === "google_calendar") return c?.calendar_backfill_complete === true;
+    return c?.backfill_complete === true;
+  };
   const states: SourceState[] = rows.map((r) => ({
     id: r.id,
     kind: r.kind,
     status: r.status,
-    backfillComplete:
-      (r.config as { backfill_complete?: boolean } | null)
-        ?.backfill_complete === true,
+    backfillComplete: backfillComplete(r.kind, r.config),
     lastSyncAt: r.lastSyncAt,
   }));
 
@@ -132,6 +141,31 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
     }
   }
 
+  // Incremental calendar pass (updatedMin — cheap, usually zero events).
+  // Without this, calendar only ever synced during its initial backfill and
+  // then went permanently stale until a manual "Sync now".
+  const calendarRows = rows.filter(
+    (r) =>
+      r.kind === "google_calendar" &&
+      r.status !== "needs_reauth" &&
+      backfillComplete(r.kind, r.config),
+  );
+  for (const c of calendarRows) {
+    try {
+      const r = await syncGoogleCalendar(c.id);
+      if (r.recordsNew > 0) {
+        return {
+          phase: "syncing",
+          done: false,
+          detail: `Fetching calendar changes · ${c.accountEmail || "account"}`,
+          syncedThreads: r.recordsSeen,
+        };
+      }
+    } catch (e) {
+      console.error("rebuild: incremental calendar failed", c.id, e);
+    }
+  }
+
   await runDedupe(userId);
 
   // Auto-apply the "safe" set (exact email + high name/phone/linkedin) — the
@@ -151,6 +185,7 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
       ),
     )
     .limit(MERGE_BATCH);
+  let mergeFailures = 0;
   if (safe.length > 0) {
     // Skip the per-merge relink here — the final pass does one global relink.
     const merged = await bulkApply(
@@ -158,11 +193,25 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
       safe.map((c) => c.id),
       { relink: false },
     );
-    return {
-      phase: "merging",
-      done: false,
-      detail: `Merging duplicates (${merged.applied})`,
-    };
+    mergeFailures = merged.failed;
+    if (merged.failed > 0) {
+      console.error(
+        `rebuild: ${merged.failed}/${safe.length} safe merges failed`,
+        merged.errors.slice(0, 5),
+      );
+    }
+    // Only stay in the merging phase while we're making progress. If EVERY
+    // candidate in the batch failed, returning "merging" would re-select the
+    // identical batch next pass (runDedupe recreates pending candidates each
+    // pass) and the button/cron loop would spin forever. Fall through to
+    // finalize instead; the next full rebuild retries them once.
+    if (merged.applied > 0) {
+      return {
+        phase: "merging",
+        done: false,
+        detail: `Merging duplicates (${merged.applied})`,
+      };
+    }
   }
 
   // No safe merges left → finalize: enrich + one global relink.
@@ -188,6 +237,7 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
       emailsLinked: relink.totals.emails,
       unknownRemoved,
       businessRemoved,
+      ...(mergeFailures > 0 ? { mergeFailures } : {}),
     },
   };
 }

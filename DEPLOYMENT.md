@@ -180,3 +180,32 @@ insensitive, Vercel's Linux is not). Claude diagnoses these quickly.
 **Push to GitHub. Vercel deploys automatically.**
 
 That's it. That's deployment.
+
+---
+
+## net-work specifics
+
+This project (`03-build/web`) has a few things that differ from a generic
+Next.js starter:
+
+- **Environment variables.** The app needs a handful of secrets set in
+  Vercel (Project → Settings → Environment Variables) before it fully
+  works: Supabase database + API keys, Google OAuth credentials, the app
+  owner's email, and a cron secret. See `03-build/web/README.md` for the
+  full table and `03-build/web/.env.example` for the exact names. The
+  build itself succeeds without any of them (so CI and preview deploys
+  never break); features that need a missing var fail clearly at that
+  point, not silently.
+- **Database migrations are hand-applied, not automatic.** Never run
+  `drizzle-kit push` against this project's database — ask Claude to
+  apply pending SQL files in `03-build/web/db/migrations/` by hand via
+  Supabase instead. Running the automatic push tool has previously
+  deleted search indexes that had to be rebuilt.
+- **A daily background job.** Vercel Cron calls `/api/cron/rebuild` once
+  a day (09:00 UTC) to sync and merge new data automatically. It needs
+  the `CRON_SECRET` environment variable set, or it silently does
+  nothing (fails safe — it just skips the run).
+- **Error monitoring (Sentry) is optional.** Once Robb creates a free
+  account at sentry.io and pastes the DSN into Vercel as `SENTRY_DSN`,
+  the app starts reporting crashes there automatically. Until then, it's
+  completely inactive — no extra cost, no extra risk.

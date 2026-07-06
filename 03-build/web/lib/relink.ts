@@ -8,14 +8,40 @@
  * don't exist yet at ingest time. This runs after merge/apply.
  */
 import "server-only";
-import { and, arrayOverlaps, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, arrayOverlaps, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { normalizePhoneHandle } from "@/lib/handles";
+import {
+  buildHandleMaps,
+  matchAttendees,
+  matchCallHandle,
+  matchEmailRow,
+  matchThreadHandle,
+} from "@/lib/relink-match";
 
 // Phone normalization for handle matching — shared with the ingest route and
 // diary so a group thread's participant roster matches contacts identically.
 // See lib/handles.ts for the rationale (last-10-digits collapse).
 const normalizePhone = normalizePhoneHandle;
+
+/**
+ * Build a `text[]` SQL literal from a plain JS array, as individually bound
+ * parameters (`ARRAY[$1, $2, ...]::text[]`) rather than interpolating the
+ * array itself into a `sql` template. postgres-js's tagged-template helper
+ * auto-detects a plain JS array and encodes it as a Postgres array literal,
+ * but drizzle's `sql` template goes through `client.unsafe(query, params)`
+ * instead, which does NOT get that auto-detection — the array is passed
+ * through as one opaque param and Postgres rejects it ("malformed array
+ * literal"). Binding each element separately sidesteps the driver gap
+ * entirely. Used for the `= any(...)` / `unnest(...)` checks below.
+ */
+function sqlTextArray(values: string[]) {
+  if (values.length === 0) return sql`ARRAY[]::text[]`;
+  return sql`ARRAY[${sql.join(
+    values.map((v) => sql`${v}`),
+    sql.raw(", "),
+  )}]::text[]`;
+}
 
 export interface RelinkResult {
   contactId: string;
@@ -172,20 +198,23 @@ export async function relinkContact(contactId: string): Promise<RelinkResult> {
     calendarEvents: 0,
   };
 
-  // Phone-keyed: build the contact's normalized-phone set, fetch dangling
-  // threads/calls, match in JS (string-equality SQL won't work because
-  // iMessage/CallHistory store +E164 while Apple Contacts stores arbitrary
-  // user-formatted strings).
-  const normPhones = new Set<string>();
-  for (const p of phonesArr) {
-    const n = normalizePhone(p);
-    if (n) normPhones.add(n);
-  }
-  // Email handles still match via straight string equality.
-  const emailHandles = new Set(emailsArr);
+  // Phone-keyed: build the contact's handle maps (same pure matcher as the
+  // bulk pass — lib/relink-match.ts owns the case/normalization policy), fetch
+  // dangling threads/calls, match in JS (string-equality SQL won't work
+  // because iMessage/CallHistory store +E164 while Apple Contacts stores
+  // arbitrary user-formatted strings).
+  const maps = {
+    emailToContact: new Map(emailsArr.map((e) => [e, contactId])),
+    phoneToContact: new Map(
+      phonesArr
+        .map((p) => normalizePhone(p))
+        .filter((n): n is string => !!n)
+        .map((n) => [n, contactId] as const),
+    ),
+  };
 
   // Message threads
-  if (normPhones.size > 0 || emailHandles.size > 0) {
+  if (maps.phoneToContact.size > 0 || maps.emailToContact.size > 0) {
     const dangling = await db
       .select({
         id: schema.messageThreads.id,
@@ -195,13 +224,7 @@ export async function relinkContact(contactId: string): Promise<RelinkResult> {
       .where(isNull(schema.messageThreads.contactId));
     const matchedThreadIds: string[] = [];
     for (const t of dangling) {
-      if (!t.handle) continue;
-      if (t.handle.includes("@")) {
-        if (emailHandles.has(t.handle.toLowerCase())) matchedThreadIds.push(t.id);
-      } else {
-        const n = normalizePhone(t.handle);
-        if (n && normPhones.has(n)) matchedThreadIds.push(t.id);
-      }
+      if (matchThreadHandle(t.handle, maps)) matchedThreadIds.push(t.id);
     }
     if (matchedThreadIds.length > 0) {
       await db
@@ -225,15 +248,14 @@ export async function relinkContact(contactId: string): Promise<RelinkResult> {
   }
 
   // Call logs by normalized phone
-  if (normPhones.size > 0) {
+  if (maps.phoneToContact.size > 0) {
     const dangling = await db
       .select({ id: schema.callLogs.id, handle: schema.callLogs.handle })
       .from(schema.callLogs)
       .where(isNull(schema.callLogs.contactId));
     const matchedCallIds: string[] = [];
     for (const c of dangling) {
-      const n = normalizePhone(c.handle);
-      if (n && normPhones.has(n)) matchedCallIds.push(c.id);
+      if (matchCallHandle(c.handle, maps)) matchedCallIds.push(c.id);
     }
     if (matchedCallIds.length > 0) {
       await db
@@ -244,8 +266,14 @@ export async function relinkContact(contactId: string): Promise<RelinkResult> {
     }
   }
 
-  // Emails by from_email (single-valued) or to_emails overlap
+  // Emails by from_email (single-valued) or to_emails overlap. Matching is
+  // lower()-normalized in SQL so it agrees with the JS matcher in
+  // lib/relink-match.ts even if a future ingest source stores mixed case
+  // (emailsArr is already lowercased above; gmail sync lowercases at write
+  // time, so today lower() is a no-op that costs one function call per
+  // dangling row — the partial emails_dangling_idx keeps the scan bounded).
   if (emailsArr.length > 0) {
+    const emailsArrSql = sqlTextArray(emailsArr);
     const updatedEmails = await db
       .update(schema.emails)
       .set({ contactId })
@@ -253,8 +281,8 @@ export async function relinkContact(contactId: string): Promise<RelinkResult> {
         and(
           isNull(schema.emails.contactId),
           or(
-            inArray(schema.emails.fromEmail, emailsArr),
-            arrayOverlaps(schema.emails.toEmails, emailsArr),
+            sql`lower(${schema.emails.fromEmail}) = any(${emailsArrSql})`,
+            sql`exists (select 1 from unnest(${schema.emails.toEmails}) as t(addr) where lower(t.addr) = any(${emailsArrSql}))`,
           ),
         ),
       )
@@ -283,14 +311,15 @@ export async function relinkContact(contactId: string): Promise<RelinkResult> {
       result.emailThreads = updatedThreads.length;
     }
 
-    // Calendar events by attendee email overlap.
+    // Calendar events by attendee email overlap (lower()-normalized, same
+    // policy as matchAttendees in lib/relink-match.ts).
     const updatedEvents = await db
       .update(schema.calendarEvents)
       .set({ contactId })
       .where(
         and(
           isNull(schema.calendarEvents.contactId),
-          arrayOverlaps(schema.calendarEvents.attendees, emailsArr),
+          sql`exists (select 1 from unnest(${schema.calendarEvents.attendees}) as t(addr) where lower(t.addr) = any(${emailsArrSql}))`,
         ),
       )
       .returning({ id: schema.calendarEvents.id });
@@ -298,6 +327,138 @@ export async function relinkContact(contactId: string): Promise<RelinkResult> {
   }
 
   return result;
+}
+
+/**
+ * Scoped relink for a known set of message-thread handles — used by the
+ * mac-agent ingest path, which knows exactly which thread handles a batch
+ * touched. Avoids the full dangling-table scan of relinkAfterMerge on every
+ * one of the agent's nightly batches; the nightly rebuild still runs the
+ * global pass. Handles are matched with the same shared matcher
+ * (lib/relink-match.ts) as everything else.
+ */
+export async function relinkThreadsByHandles(
+  userId: string,
+  handles: string[],
+): Promise<{ messageThreads: number; messages: number }> {
+  const out = { messageThreads: 0, messages: 0 };
+  const wanted = [...new Set(handles.filter((h): h is string => !!h))];
+  if (wanted.length === 0) return out;
+
+  const selfEmails = await getSelfEmails(userId);
+  const raws = await db
+    .select({
+      contactId: schema.rawContacts.contactId,
+      emails: schema.rawContacts.emails,
+      phones: schema.rawContacts.phones,
+    })
+    .from(schema.rawContacts)
+    .innerJoin(
+      schema.contacts,
+      eq(schema.contacts.id, schema.rawContacts.contactId),
+    )
+    .where(eq(schema.contacts.userId, userId));
+  const maps = buildHandleMaps(raws, selfEmails);
+
+  // Exact stored-handle equality is correct here: the caller passes the
+  // batch's handle strings verbatim, which are what ingest stored.
+  const dangling = await db
+    .select({
+      id: schema.messageThreads.id,
+      handle: schema.messageThreads.handle,
+    })
+    .from(schema.messageThreads)
+    .where(
+      and(
+        isNull(schema.messageThreads.contactId),
+        inArray(schema.messageThreads.handle, wanted),
+      ),
+    );
+
+  const byContact = new Map<string, string[]>();
+  for (const t of dangling) {
+    const cid = matchThreadHandle(t.handle, maps);
+    if (!cid) continue;
+    const arr = byContact.get(cid) ?? [];
+    arr.push(t.id);
+    byContact.set(cid, arr);
+  }
+  for (const [cid, ids] of byContact) {
+    await db
+      .update(schema.messageThreads)
+      .set({ contactId: cid, updatedAt: new Date() })
+      .where(inArray(schema.messageThreads.id, ids));
+    out.messageThreads += ids.length;
+    const m = await db
+      .update(schema.messages)
+      .set({ contactId: cid })
+      .where(
+        and(
+          inArray(schema.messages.threadId, ids),
+          isNull(schema.messages.contactId),
+        ),
+      )
+      .returning({ id: schema.messages.id });
+    out.messages += m.length;
+  }
+  return out;
+}
+
+/**
+ * Same idea for call logs — used by the mac-agent's calls batches so a
+ * night's calls appear on contact pages immediately instead of waiting for
+ * the next global relink (pre-2026-07, calls relied on the messages
+ * batches' global pass as a side effect).
+ */
+export async function relinkCallsByHandles(
+  userId: string,
+  handles: string[],
+): Promise<{ callLogs: number }> {
+  const out = { callLogs: 0 };
+  const wanted = [...new Set(handles.filter((h): h is string => !!h))];
+  if (wanted.length === 0) return out;
+
+  const selfEmails = await getSelfEmails(userId);
+  const raws = await db
+    .select({
+      contactId: schema.rawContacts.contactId,
+      emails: schema.rawContacts.emails,
+      phones: schema.rawContacts.phones,
+    })
+    .from(schema.rawContacts)
+    .innerJoin(
+      schema.contacts,
+      eq(schema.contacts.id, schema.rawContacts.contactId),
+    )
+    .where(eq(schema.contacts.userId, userId));
+  const maps = buildHandleMaps(raws, selfEmails);
+
+  const dangling = await db
+    .select({ id: schema.callLogs.id, handle: schema.callLogs.handle })
+    .from(schema.callLogs)
+    .where(
+      and(
+        isNull(schema.callLogs.contactId),
+        inArray(schema.callLogs.handle, wanted),
+      ),
+    );
+
+  const byContact = new Map<string, string[]>();
+  for (const c of dangling) {
+    const cid = matchCallHandle(c.handle, maps);
+    if (!cid) continue;
+    const arr = byContact.get(cid) ?? [];
+    arr.push(c.id);
+    byContact.set(cid, arr);
+  }
+  for (const [cid, ids] of byContact) {
+    await db
+      .update(schema.callLogs)
+      .set({ contactId: cid })
+      .where(inArray(schema.callLogs.id, ids));
+    out.callLogs += ids.length;
+  }
+  return out;
 }
 
 /**
@@ -338,23 +499,10 @@ export async function relinkAfterMerge(
     )
     .where(eq(schema.contacts.userId, userId));
 
-  const contactIds = new Set<string>();
-  const phoneToContact = new Map<string, string>();
-  const emailToContact = new Map<string, string>();
-  for (const r of raws) {
-    if (!r.contactId) continue;
-    contactIds.add(r.contactId);
-    for (const p of r.phones ?? []) {
-      const n = normalizePhone(p);
-      if (n && !phoneToContact.has(n)) phoneToContact.set(n, r.contactId);
-    }
-    for (const e of r.emails ?? []) {
-      if (!e) continue;
-      const lower = e.toLowerCase();
-      if (selfEmails.has(lower)) continue; // never match on the user's own address
-      if (!emailToContact.has(lower)) emailToContact.set(lower, r.contactId);
-    }
-  }
+  // Shared pure matcher (lib/relink-match.ts) — same maps + policy as the
+  // per-contact path, so the two can never diverge again.
+  const maps = buildHandleMaps(raws, selfEmails);
+  const { contactIds } = maps;
 
   // Helper: group ids by target contactId, then issue one UPDATE per group.
   const updateByGroup = async <T extends { id: string; cid: string }>(
@@ -382,14 +530,7 @@ export async function relinkAfterMerge(
     .where(isNull(schema.messageThreads.contactId));
   const threadMatches: { id: string; cid: string }[] = [];
   for (const t of danglingThreads) {
-    if (!t.handle) continue;
-    let cid: string | undefined;
-    if (t.handle.includes("@")) {
-      cid = emailToContact.get(t.handle.toLowerCase());
-    } else {
-      const n = normalizePhone(t.handle);
-      cid = n ? phoneToContact.get(n) : undefined;
-    }
+    const cid = matchThreadHandle(t.handle, maps);
     if (cid) threadMatches.push({ id: t.id, cid });
   }
   totals.messageThreads = await updateByGroup(threadMatches, async (cid, ids) => {
@@ -419,8 +560,7 @@ export async function relinkAfterMerge(
     .where(isNull(schema.callLogs.contactId));
   const callMatches: { id: string; cid: string }[] = [];
   for (const c of danglingCalls) {
-    const n = normalizePhone(c.handle);
-    const cid = n ? phoneToContact.get(n) : undefined;
+    const cid = matchCallHandle(c.handle, maps);
     if (cid) callMatches.push({ id: c.id, cid });
   }
   totals.callLogs = await updateByGroup(callMatches, async (cid, ids) => {
@@ -449,18 +589,7 @@ export async function relinkAfterMerge(
   const emailMatches: { id: string; cid: string }[] = [];
   const threadsByContact = new Map<string, Set<string>>();
   for (const e of danglingEmails) {
-    let cid = e.fromEmail
-      ? emailToContact.get(e.fromEmail.toLowerCase())
-      : undefined;
-    if (!cid) {
-      for (const t of e.toEmails ?? []) {
-        const c = emailToContact.get(t.toLowerCase());
-        if (c) {
-          cid = c;
-          break;
-        }
-      }
-    }
+    const cid = matchEmailRow(e, maps);
     if (!cid) continue;
     emailMatches.push({ id: e.id, cid });
     if (e.threadId) {
@@ -501,13 +630,8 @@ export async function relinkAfterMerge(
     .where(isNull(schema.calendarEvents.contactId));
   const eventMatches: { id: string; cid: string }[] = [];
   for (const ev of danglingEvents) {
-    for (const a of ev.attendees ?? []) {
-      const c = emailToContact.get(a.toLowerCase());
-      if (c) {
-        eventMatches.push({ id: ev.id, cid: c });
-        break;
-      }
-    }
+    const cid = matchAttendees(ev.attendees, maps);
+    if (cid) eventMatches.push({ id: ev.id, cid });
   }
   totals.calendarEvents = await updateByGroup(eventMatches, async (cid, ids) => {
     await db

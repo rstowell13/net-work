@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { PageContainer } from "@/components/PageContainer";
 import { TagManager } from "@/components/TagManager";
 import { requireUser } from "@/lib/auth";
 import { listTags } from "@/lib/tags/queries";
@@ -11,7 +12,7 @@ export default async function TagsSettingsPage() {
   const tags = await listTags(user.id);
   return (
     <AppShell active="/settings">
-      <div className="mx-auto max-w-[760px] px-4 pb-24 pt-6 md:px-14 md:pb-16 md:pt-8">
+      <PageContainer>
         <p className="mb-2 text-[12px]" style={{ color: "var(--ink-faint)" }}>
           <Link href="/settings" style={{ color: "var(--ink-muted)" }}>
             Settings
@@ -47,7 +48,7 @@ export default async function TagsSettingsPage() {
           .
         </p>
         <TagManager tags={tags} />
-      </div>
+      </PageContainer>
     </AppShell>
   );
 }
