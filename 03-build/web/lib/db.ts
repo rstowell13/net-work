@@ -7,14 +7,6 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "@/db/schema";
 
-// Prefer the transaction-mode pooler (Supabase port 6543) when it's
-// configured — far higher concurrency than the session-mode pooler
-// (port 5432, pool_size=15) which exhausts under serverless.
-const databaseUrl = process.env.DATABASE_URL_POOLED ?? process.env.DATABASE_URL;
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL is not set");
-}
-
 // One connection per process — both in dev (HMR safe) and in prod
 // (serverless functions are short-lived and the Supabase pooler in
 // session mode caps at 15 clients). Multiple connections per function
@@ -25,18 +17,51 @@ if (!databaseUrl) {
 // returns to the pooler quickly between invocations.
 const globalForDb = globalThis as unknown as {
   pgClient?: ReturnType<typeof postgres>;
+  drizzleDb?: ReturnType<typeof drizzle<typeof schema>>;
 };
 
-const client =
-  globalForDb.pgClient ??
-  postgres(databaseUrl, {
-    max: 1,
-    prepare: false,
-    idle_timeout: 20,
-    max_lifetime: 60 * 30,
-  });
+// Lazy — the connection (and the "DATABASE_URL is not set" check) must not
+// run at module-evaluation time, or `next build` fails whenever env vars
+// are absent (e.g. CI, which builds with no secrets). Deferring to first
+// actual query means the throw only happens at request time.
+function getDb() {
+  if (globalForDb.drizzleDb) return globalForDb.drizzleDb;
 
-if (process.env.NODE_ENV !== "production") globalForDb.pgClient = client;
+  // Prefer the transaction-mode pooler (Supabase port 6543) when it's
+  // configured — far higher concurrency than the session-mode pooler
+  // (port 5432, pool_size=15) which exhausts under serverless.
+  const databaseUrl =
+    process.env.DATABASE_URL_POOLED ?? process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error(
+      "Missing required env var: DATABASE_URL (or DATABASE_URL_POOLED)",
+    );
+  }
 
-export const db = drizzle(client, { schema });
+  const client =
+    globalForDb.pgClient ??
+    postgres(databaseUrl, {
+      max: 1,
+      prepare: false,
+      idle_timeout: 20,
+      max_lifetime: 60 * 30,
+    });
+  if (process.env.NODE_ENV !== "production") globalForDb.pgClient = client;
+
+  const instance = drizzle(client, { schema });
+  if (process.env.NODE_ENV !== "production") globalForDb.drizzleDb = instance;
+  return instance;
+}
+
+// Proxy so existing call sites (`db.select()`, `db.insert()`, ...) work
+// unchanged, but the real client isn't constructed until the first property
+// access — which only happens once a request actually runs a query.
+export const db: ReturnType<typeof drizzle<typeof schema>> = new Proxy(
+  {} as ReturnType<typeof drizzle<typeof schema>>,
+  {
+    get(_target, prop, receiver) {
+      return Reflect.get(getDb(), prop, receiver);
+    },
+  },
+);
 export { schema };
