@@ -260,15 +260,8 @@ async function moveCuratedContent(
     .update(schema.notes)
     .set({ contactId: toContactId, updatedAt: now })
     .where(inArray(schema.notes.contactId, fromContactIds));
-  await tx
-    .update(schema.scoreHistory)
-    .set({ contactId: toContactId })
-    .where(inArray(schema.scoreHistory.contactId, fromContactIds));
 
   // Derived tables — drop; they regenerate.
-  await tx
-    .delete(schema.scores)
-    .where(inArray(schema.scores.contactId, fromContactIds));
   await tx
     .delete(schema.suggestionState)
     .where(inArray(schema.suggestionState.contactId, fromContactIds));

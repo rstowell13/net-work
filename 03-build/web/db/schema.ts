@@ -10,6 +10,7 @@
  * - OAuth/agent tokens stored plaintext in v1 but isolated to Supabase
  *   service-role-only access. Column-level encryption is post-v1.
  */
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   uuid,
@@ -23,6 +24,12 @@ import {
   index,
   primaryKey,
 } from "drizzle-orm/pg-core";
+
+// NOTE ON INDEXES: migrations are applied BY HAND (Supabase SQL editor / MCP);
+// never run `drizzle-kit push` against the live DB. The expression (FTS/trgm)
+// indexes below mirror db/migrations/0005 so the schema is the single source
+// of truth; the pg_trgm EXTENSION itself is created in 0005 and cannot be
+// expressed here. Perf indexes mirror db/migrations/0008.
 
 // ============================================================
 // Enums
@@ -135,16 +142,6 @@ export const themePreferenceEnum = pgEnum("theme_preference", [
   "dark",
 ]);
 
-export const scoreKindEnum = pgEnum("score_kind", ["freshness"]);
-
-export const freshnessLabelEnum = pgEnum("freshness_label", [
-  "fresh",
-  "warm",
-  "fading",
-  "cold",
-  "dormant",
-]);
-
 // ============================================================
 // Identity
 // ============================================================
@@ -160,18 +157,6 @@ export const users = pgTable("users", {
     .notNull()
     .defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
-
-export const sessions = pgTable("sessions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  tokenHash: text("token_hash").notNull(),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
@@ -296,6 +281,12 @@ export const contacts = pgTable(
     userCategoryIdx: index("contacts_user_category_idx").on(
       t.userId,
       t.category,
+    ),
+    // Trigram index for ILIKE '%name%' search — mirrors 0005; requires the
+    // pg_trgm extension (created in 0005, cannot be expressed in Drizzle).
+    displayNameTrgmIdx: index("contacts_display_name_trgm_idx").using(
+      "gin",
+      sql`${t.displayName} gin_trgm_ops`,
     ),
   }),
 );
@@ -438,20 +429,30 @@ export const followUps = pgTable(
   }),
 );
 
-export const notes = pgTable("notes", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  contactId: uuid("contact_id")
-    .notNull()
-    .references(() => contacts.id, { onDelete: "cascade" }),
-  body: text("body").notNull(),
-  deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const notes = pgTable(
+  "notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    // Global search — mirrors 0005.
+    bodyFtsIdx: index("notes_body_fts_idx").using(
+      "gin",
+      sql`to_tsvector('english', coalesce(${t.body}, ''))`,
+    ),
+  }),
+);
 
 // ============================================================
 // Diary sources — messages, emails, calls, calendar
@@ -515,6 +516,14 @@ export const messageThreads = pgTable(
       "gin",
       t.participantHandles,
     ),
+    danglingIdx: index("message_threads_dangling_idx")
+      .on(t.handle)
+      .where(sql`${t.contactId} is null`),
+    // Global search — mirrors 0005.
+    summaryFtsIdx: index("message_threads_summary_fts_idx").using(
+      "gin",
+      sql`to_tsvector('english', coalesce(${t.summary}, ''))`,
+    ),
   }),
 );
 
@@ -548,6 +557,15 @@ export const messages = pgTable(
     contactSentIdx: index("messages_contact_sent_idx").on(
       t.contactId,
       t.sentAt,
+    ),
+    threadIdx: index("messages_thread_idx").on(t.threadId),
+    danglingIdx: index("messages_dangling_idx")
+      .on(t.threadId)
+      .where(sql`${t.contactId} is null`),
+    // Global search — mirrors 0005.
+    bodyFtsIdx: index("messages_body_fts_idx").using(
+      "gin",
+      sql`to_tsvector('english', coalesce(${t.body}, ''))`,
     ),
   }),
 );
@@ -584,6 +602,11 @@ export const emailThreads = pgTable(
       t.contactId,
       t.endedAt,
     ),
+    // Global search — mirrors 0005.
+    summaryFtsIdx: index("email_threads_summary_fts_idx").using(
+      "gin",
+      sql`to_tsvector('english', coalesce(${t.summary}, ''))`,
+    ),
   }),
 );
 
@@ -611,6 +634,18 @@ export const emails = pgTable(
   },
   (t) => ({
     uniqExternal: uniqueIndex("emails_external_uniq").on(t.externalId),
+    contactSentIdx: index("emails_contact_sent_idx").on(t.contactId, t.sentAt),
+    threadIdx: index("emails_thread_idx").on(t.threadId),
+    fromEmailIdx: index("emails_from_email_idx").on(t.fromEmail),
+    // Relink scans dangling rows (contact_id IS NULL) by sender address.
+    danglingIdx: index("emails_dangling_idx")
+      .on(t.fromEmail)
+      .where(sql`${t.contactId} is null`),
+    // Global search (lib/search/queries.ts) — mirrors 0005.
+    ftsIdx: index("emails_fts_idx").using(
+      "gin",
+      sql`to_tsvector('english', coalesce(${t.subject}, '') || ' ' || coalesce(${t.body}, ''))`,
+    ),
   }),
 );
 
@@ -639,6 +674,9 @@ export const callLogs = pgTable(
       t.startedAt,
     ),
     handleIdx: index("call_logs_handle_idx").on(t.handle),
+    danglingIdx: index("call_logs_dangling_idx")
+      .on(t.handle)
+      .where(sql`${t.contactId} is null`),
   }),
 );
 
@@ -667,6 +705,13 @@ export const calendarEvents = pgTable(
     uniqExternal: uniqueIndex("calendar_events_external_uniq").on(
       t.externalId,
     ),
+    contactStartsIdx: index("calendar_events_contact_starts_idx").on(
+      t.contactId,
+      t.startsAt,
+    ),
+    danglingIdx: index("calendar_events_dangling_idx")
+      .on(t.startsAt)
+      .where(sql`${t.contactId} is null`),
   }),
 );
 
@@ -692,44 +737,13 @@ export const relationshipSummaries = pgTable(
       t.contactId,
       t.generatedAt,
     ),
-  }),
-);
-
-export const scores = pgTable(
-  "scores",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    contactId: uuid("contact_id")
-      .notNull()
-      .references(() => contacts.id, { onDelete: "cascade" }),
-    kind: scoreKindEnum("kind").notNull(),
-    value: integer("value").notNull(),
-    label: freshnessLabelEnum("label"),
-    computedAt: timestamp("computed_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    inputsSummary: jsonb("inputs_summary").$type<Record<string, unknown>>(),
-  },
-  (t) => ({
-    uniqContactKind: uniqueIndex("scores_contact_kind_uniq").on(
-      t.contactId,
-      t.kind,
+    // Global search — mirrors 0005.
+    bodyFtsIdx: index("relationship_summaries_body_fts_idx").using(
+      "gin",
+      sql`to_tsvector('english', coalesce(${t.body}, ''))`,
     ),
   }),
 );
-
-export const scoreHistory = pgTable("score_history", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  contactId: uuid("contact_id")
-    .notNull()
-    .references(() => contacts.id, { onDelete: "cascade" }),
-  kind: scoreKindEnum("kind").notNull(),
-  value: integer("value").notNull(),
-  label: freshnessLabelEnum("label"),
-  computedAt: timestamp("computed_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
 
 // ============================================================
 // Weekly plan

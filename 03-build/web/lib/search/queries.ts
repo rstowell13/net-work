@@ -141,7 +141,6 @@ interface ContactRow {
   primaryPhone: string | null;
   photoUrl: string | null;
   category: "personal" | "business" | "both" | null;
-  freshness: number | null;
 }
 
 function searchContacts(userId: string, pat: string): Promise<ContactRow[]> {
@@ -153,16 +152,8 @@ function searchContacts(userId: string, pat: string): Promise<ContactRow[]> {
       primaryPhone: schema.contacts.primaryPhone,
       photoUrl: schema.contacts.photoUrl,
       category: schema.contacts.category,
-      freshness: schema.scores.value,
     })
     .from(schema.contacts)
-    .leftJoin(
-      schema.scores,
-      and(
-        eq(schema.scores.contactId, schema.contacts.id),
-        eq(schema.scores.kind, "freshness"),
-      ),
-    )
     .where(
       and(
         eq(schema.contacts.userId, userId),
@@ -203,7 +194,7 @@ function rankContacts(
       tier = 30;
       matchedOn = "phone";
     }
-    return { r, matchedOn, sort: tier + (r.freshness ?? 0) * 0.1 };
+    return { r, matchedOn, sort: tier };
   });
   scored.sort((a, b) => b.sort - a.sort);
   return scored.slice(0, limit).map(({ r, matchedOn }) => ({
