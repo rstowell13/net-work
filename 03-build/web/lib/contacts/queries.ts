@@ -44,13 +44,22 @@ async function aggregateLastSeen(
     if (!cur || cur < date) out.set(id, date);
   };
 
+  // Group chats are excluded everywhere freshness is computed: being on a
+  // 40-person thread says nothing about closeness. (The contact detail page
+  // applied this policy from day one; the list aggregates caught up in the
+  // 2026-07 freshness unification.)
   const m = await db
     .select({
       id: schema.messages.contactId,
       when: sql<Date>`max(${schema.messages.sentAt})`,
     })
     .from(schema.messages)
-    .where(inArray(schema.messages.contactId, contactIds))
+    .where(
+      and(
+        inArray(schema.messages.contactId, contactIds),
+        eq(schema.messages.isGroup, false),
+      ),
+    )
     .groupBy(schema.messages.contactId);
   for (const r of m) update(r.id, r.when);
 
@@ -98,6 +107,8 @@ async function aggregateInteractions365(
       and(
         inArray(schema.messages.contactId, contactIds),
         gte(schema.messages.sentAt, cutoff),
+        // Same group-exclusion policy as aggregateLastSeen.
+        eq(schema.messages.isGroup, false),
       ),
     )
     .groupBy(schema.messages.contactId);

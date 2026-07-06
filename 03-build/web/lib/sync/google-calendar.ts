@@ -149,9 +149,18 @@ export async function syncGoogleCalendar(sourceId: string) {
         try {
           res = await cal.events.list({ ...listParamsBase, pageToken });
         } catch (err) {
-          console.error("calendar events.list error", err);
-          bailedEarly = true;
-          break;
+          // Only quota/rate pressure is a soft bail (same as gmail.ts).
+          // Anything else — expired token, revoked scope, network — must
+          // PROPAGATE so runImport records the failure and
+          // classifyFailureStatus can flip the source to needs_reauth;
+          // swallowing it would show eternally-"successful" empty syncs.
+          const msg = err instanceof Error ? err.message : String(err);
+          if (/quota|rate|exceeded|429/i.test(msg)) {
+            console.error("calendar events.list quota bail", msg);
+            bailedEarly = true;
+            break;
+          }
+          throw err;
         }
 
         const events = res.data.items ?? [];

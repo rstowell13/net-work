@@ -18,9 +18,10 @@ import { MergeContactButton } from "@/components/MergeContactButton";
 import { requireUser } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 import { getTagsForContact, listTags } from "@/lib/tags/queries";
+import { getFreshnessForContactIds } from "@/lib/contacts/queries";
 import { getDiary, getRelationshipInputs } from "@/lib/diary";
 import { getOrGenerateRelationshipSummary } from "@/lib/llm/summary";
-import { computeFreshness, bandColor, bandLabel } from "@/lib/scoring/freshness";
+import { bandColor, bandLabel } from "@/lib/scoring/freshness";
 import { dedupePhonesForDisplay, formatPhoneDisplay } from "@/lib/phone-format";
 import { normalizePhone } from "@/lib/merge/normalize";
 
@@ -100,20 +101,21 @@ export default async function ContactDetailPage({
   const diary = diaryResult.entries;
   const groupThreadCount = diaryResult.groupThreadCount;
 
-  // Last seen + interactions for freshness — computed from 1-on-1 entries only,
-  // so group-chat activity never inflates how close this contact looks (even
-  // when group texts are toggled into view).
-  const oneOnOne = diary.filter((d) => !d.isGroup);
-  const lastSeen = oneOnOne[0]?.when ?? null;
-  // eslint-disable-next-line react-hooks/purity
-  const cutoff = Date.now() - 365 * 86400_000;
-  const interactions365 = oneOnOne.filter(
-    (d) => d.when.getTime() >= cutoff && d.channel !== "note",
-  ).length;
-  const freshness = computeFreshness({
-    lastSeenAt: lastSeen,
-    interactions365,
-  });
+  // Freshness comes from the SAME aggregate helper the contacts list and
+  // triage use (getFreshnessForContactIds → aggregateLastSeen +
+  // aggregateInteractions365, group messages excluded) — before the 2026-07
+  // unification this page computed its own thread-level, 50-capped,
+  // calendar-inclusive version and could show a different ring than the list
+  // for the same person.
+  const freshnessEntry = (await getFreshnessForContactIds([id])).get(id);
+  const lastSeen = freshnessEntry?.lastSeenAt ?? null;
+  const freshness = freshnessEntry?.freshness ?? {
+    score: 0,
+    band: "unknown" as const,
+    daysSince: null,
+    interactions365: 0,
+  };
+  const interactions365 = freshness.interactions365;
 
   // Generate relationship summary lazily — cached by inputs hash.
   // Never let an LLM failure (rate limit, timeout, network) crash the page.

@@ -310,6 +310,81 @@ export async function relinkContact(contactId: string): Promise<RelinkResult> {
 }
 
 /**
+ * Scoped relink for a known set of message-thread handles — used by the
+ * mac-agent ingest path, which knows exactly which thread handles a batch
+ * touched. Avoids the full dangling-table scan of relinkAfterMerge on every
+ * one of the agent's nightly batches; the nightly rebuild still runs the
+ * global pass. Handles are matched with the same shared matcher
+ * (lib/relink-match.ts) as everything else.
+ */
+export async function relinkThreadsByHandles(
+  userId: string,
+  handles: string[],
+): Promise<{ messageThreads: number; messages: number }> {
+  const out = { messageThreads: 0, messages: 0 };
+  const wanted = [...new Set(handles.filter((h): h is string => !!h))];
+  if (wanted.length === 0) return out;
+
+  const selfEmails = await getSelfEmails(userId);
+  const raws = await db
+    .select({
+      contactId: schema.rawContacts.contactId,
+      emails: schema.rawContacts.emails,
+      phones: schema.rawContacts.phones,
+    })
+    .from(schema.rawContacts)
+    .innerJoin(
+      schema.contacts,
+      eq(schema.contacts.id, schema.rawContacts.contactId),
+    )
+    .where(eq(schema.contacts.userId, userId));
+  const maps = buildHandleMaps(raws, selfEmails);
+
+  // Exact stored-handle equality is correct here: the caller passes the
+  // batch's handle strings verbatim, which are what ingest stored.
+  const dangling = await db
+    .select({
+      id: schema.messageThreads.id,
+      handle: schema.messageThreads.handle,
+    })
+    .from(schema.messageThreads)
+    .where(
+      and(
+        isNull(schema.messageThreads.contactId),
+        inArray(schema.messageThreads.handle, wanted),
+      ),
+    );
+
+  const byContact = new Map<string, string[]>();
+  for (const t of dangling) {
+    const cid = matchThreadHandle(t.handle, maps);
+    if (!cid) continue;
+    const arr = byContact.get(cid) ?? [];
+    arr.push(t.id);
+    byContact.set(cid, arr);
+  }
+  for (const [cid, ids] of byContact) {
+    await db
+      .update(schema.messageThreads)
+      .set({ contactId: cid, updatedAt: new Date() })
+      .where(inArray(schema.messageThreads.id, ids));
+    out.messageThreads += ids.length;
+    const m = await db
+      .update(schema.messages)
+      .set({ contactId: cid })
+      .where(
+        and(
+          inArray(schema.messages.threadId, ids),
+          isNull(schema.messages.contactId),
+        ),
+      )
+      .returning({ id: schema.messages.id });
+    out.messages += m.length;
+  }
+  return out;
+}
+
+/**
  * Bulk relink for every contact owned by a user.
  *
  * Single-pass approach — much cheaper than calling relinkContact per

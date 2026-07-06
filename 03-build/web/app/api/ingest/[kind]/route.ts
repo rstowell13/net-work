@@ -21,7 +21,7 @@ import {
 } from "@/db/schema";
 import { validateAgentToken } from "@/lib/agent-token";
 import { runImport } from "@/lib/sync/run";
-import { relinkAfterMerge } from "@/lib/relink";
+import { relinkAfterMerge, relinkThreadsByHandles } from "@/lib/relink";
 import { normalizeHandle } from "@/lib/handles";
 
 export const runtime = "nodejs";
@@ -125,10 +125,12 @@ export async function POST(
       .where(eq(sources.id, sourceId));
   }
 
-  // After messages or contacts ingest, relink dangling diary rows so the
-  // diary view actually shows the new data. Idempotent + bounded by the
-  // count of NULL-contact_id rows, so cheap once steady-state. Swallow
-  // errors — a slow relink must never fail the ingest.
+  // After ingest, relink dangling diary rows so the diary view actually
+  // shows the new data. Messages batches (many per night) get a relink
+  // SCOPED to the batch's thread handles — the global scan used to run once
+  // per batch and never shrank. Contacts batches (few, and their new
+  // handles can claim OLD dangling rows anywhere) keep the global pass.
+  // Swallow errors — a slow relink must never fail the ingest.
   if (result.status === "success" && (kind === "messages" || kind === "contacts")) {
     try {
       const src = await db
@@ -137,7 +139,18 @@ export async function POST(
         .where(eq(sources.id, sourceId))
         .limit(1);
       if (src[0]?.userId) {
-        await relinkAfterMerge(src[0].userId);
+        if (kind === "messages") {
+          const groups = body.batch as { threads?: IMessageThread[] }[];
+          const batchHandles = groups.flatMap(
+            (g) => g.threads?.map((t) => t.handle) ?? [],
+          );
+          await relinkThreadsByHandles(
+            src[0].userId,
+            batchHandles.filter((h): h is string => !!h),
+          );
+        } else {
+          await relinkAfterMerge(src[0].userId);
+        }
       }
     } catch (err) {
       console.error("post-ingest relink failed", err);
