@@ -12,23 +12,10 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Avatar } from "./Avatar";
-import { TagChip } from "./TagChip";
-import type {
-  MentionSource,
-  SearchResults,
-} from "@/lib/search/queries";
-import { formatPhoneDisplay } from "@/lib/phone-format";
+import { SearchHitList } from "./SearchHitList";
+import type { SearchResults } from "@/lib/search/queries";
 
 const EMPTY: SearchResults = { contacts: [], tags: [], mentions: [] };
-
-const SOURCE_LABEL: Record<MentionSource, string> = {
-  note: "Note",
-  email: "Email",
-  message: "Message",
-  summary: "Summary",
-  event: "Event",
-};
 
 function hrefForContact(id: string) {
   return `/contacts/${id}`;
@@ -327,8 +314,6 @@ function ResultsPanel({
 }) {
   const { contacts, tags, mentions } = results;
   const empty = contacts.length === 0 && tags.length === 0 && mentions.length === 0;
-  const tagsStart = contacts.length;
-  const mentionsStart = contacts.length + tags.length;
 
   if (empty) {
     return (
@@ -340,77 +325,13 @@ function ResultsPanel({
 
   return (
     <div className="py-2">
-      {contacts.length > 0 && (
-        <Group label="People">
-          {contacts.map((c, i) => (
-            <Row
-              key={c.id}
-              index={i}
-              active={active === i}
-              onHover={onHover}
-              onSelect={() => onSelect(hrefForContact(c.id))}
-            >
-              <Avatar id={c.id} name={c.displayName} photoUrl={c.photoUrl} size="sm" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13.5px]" style={{ color: "var(--ink)" }}>
-                  {c.displayName}
-                </span>
-                {(c.matchedOn === "email" || c.matchedOn === "phone") && (
-                  <span className="block truncate text-[12px]" style={{ color: "var(--ink-faint)" }}>
-                    {c.matchedOn === "email"
-                      ? c.primaryEmail
-                      : formatPhoneDisplay(c.primaryPhone)}
-                  </span>
-                )}
-              </span>
-            </Row>
-          ))}
-        </Group>
-      )}
-
-      {tags.length > 0 && (
-        <Group label="Tags">
-          {tags.map((t, i) => (
-            <Row
-              key={t.id}
-              index={tagsStart + i}
-              active={active === tagsStart + i}
-              onHover={onHover}
-              onSelect={() => onSelect(hrefForTag(t.id))}
-            >
-              <TagChip name={t.name} color={t.color} />
-              <span className="flex-1 text-right text-[12px] tabular-nums" style={{ color: "var(--ink-faint)" }}>
-                {t.contactCount} {t.contactCount === 1 ? "contact" : "contacts"}
-              </span>
-            </Row>
-          ))}
-        </Group>
-      )}
-
-      {mentions.length > 0 && (
-        <Group label="Mentions">
-          {mentions.map((m, i) => (
-            <Row
-              key={`${m.contactId}-${i}`}
-              index={mentionsStart + i}
-              active={active === mentionsStart + i}
-              onHover={onHover}
-              onSelect={() => onSelect(hrefForContact(m.contactId))}
-            >
-              <Avatar id={m.contactId} name={m.displayName} photoUrl={m.photoUrl} size="sm" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13.5px]" style={{ color: "var(--ink)" }}>
-                  {m.displayName}
-                </span>
-                <span className="block truncate text-[12px]" style={{ color: "var(--ink-muted)" }}>
-                  {m.snippet}
-                </span>
-              </span>
-              <SourcePill source={m.source} />
-            </Row>
-          ))}
-        </Group>
-      )}
+      <SearchHitList
+        results={results}
+        density="compact"
+        active={active}
+        onHover={onHover}
+        onSelect={onSelect}
+      />
 
       {query.trim().length >= 2 && (
         <button
@@ -429,57 +350,6 @@ function ResultsPanel({
         </button>
       )}
     </div>
-  );
-}
-
-function Group({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="px-1.5 pb-1">
-      <p
-        className="px-2.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.16em]"
-        style={{ color: "var(--ink-faint)" }}
-      >
-        {label}
-      </p>
-      {children}
-    </div>
-  );
-}
-
-function Row({
-  index,
-  active,
-  onHover,
-  onSelect,
-  children,
-}: {
-  index: number;
-  active: boolean;
-  onHover: (i: number) => void;
-  onSelect: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onMouseEnter={() => onHover(index)}
-      onClick={onSelect}
-      className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left"
-      style={{ background: active ? "var(--brass-soft)" : undefined }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function SourcePill({ source }: { source: MentionSource }) {
-  return (
-    <span
-      className="shrink-0 rounded px-1.5 py-0.5 text-[10.5px] font-medium"
-      style={{ background: "var(--stone-sunken)", color: "var(--ink-muted)" }}
-    >
-      {SOURCE_LABEL[source]}
-    </span>
   );
 }
 

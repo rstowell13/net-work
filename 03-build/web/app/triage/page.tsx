@@ -1,19 +1,13 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { PageContainer } from "@/components/PageContainer";
 import { TriageCard } from "@/components/TriageCard";
 import { requireUser } from "@/lib/auth";
 import { getNextTriageContact, getStatusCounts } from "@/lib/contacts/queries";
 import { mergeRecentInteractions } from "@/lib/contacts/recent";
+import { daysAgoLabel } from "@/lib/format-time";
 
 export const dynamic = "force-dynamic";
-
-function daysAgoLabel(d: Date | null, now: number): string {
-  if (!d) return "—";
-  const days = Math.floor((now - d.getTime()) / 86400_000);
-  if (days < 1) return "today";
-  if (days === 1) return "1 day ago";
-  return `${days} days ago`;
-}
 
 export default async function TriagePage() {
   const user = await requireUser();
@@ -27,7 +21,7 @@ export default async function TriagePage() {
 
   return (
     <AppShell active="/triage">
-      <div className="mx-auto max-w-[760px] px-4 pb-24 pt-6 md:px-14 md:pb-16 md:pt-8">
+      <PageContainer>
         {!next ? (
           <EmptyState hiddenCount={queue.hiddenCount} />
         ) : (
@@ -56,7 +50,7 @@ export default async function TriagePage() {
             }}
           />
         )}
-      </div>
+      </PageContainer>
     </AppShell>
   );
 }

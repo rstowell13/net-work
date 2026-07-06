@@ -37,6 +37,14 @@ export interface FreshnessInputs {
   interactions365: number; // count of msg/email/call/event in last 365d
 }
 
+/** Half-life constant (days) for the recency-decay curve used across scoring/search. */
+const RECENCY_HALFLIFE_DAYS = 180;
+
+/** Exponential recency decay: 1 at day 0, ~0.6 at the half-life, → 0 as days grow. */
+export function recencyDecay(days: number): number {
+  return Math.exp(-days / RECENCY_HALFLIFE_DAYS);
+}
+
 export function computeFreshness(
   inputs: FreshnessInputs,
   now: Date = new Date(),
@@ -50,7 +58,7 @@ export function computeFreshness(
     Math.floor((now.getTime() - lastSeenAt.getTime()) / 86400_000),
   );
   // Recency: exponential decay; half-life ~125 days.
-  const recency = Math.exp(-days / 180);
+  const recency = recencyDecay(days);
   // Frequency: 0 → 0; 1 → ~0.3; 5 → ~0.7; 20+ → ~1. log scale.
   const freq = Math.min(1, Math.log1p(interactions365) / Math.log(20));
   // Blend 70/30 — recency dominates because old-but-frequent doesn't beat

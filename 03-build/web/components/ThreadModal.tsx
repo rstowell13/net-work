@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { fmtTimeLocale, fmtDateHeader } from "@/lib/format-time";
 
 type MsgRow = {
   id: string;
@@ -24,25 +25,6 @@ type EmailRow = {
 type ThreadResponse =
   | { kind: "message"; messages: MsgRow[]; summary: string | null }
   | { kind: "email"; messages: EmailRow[]; summary: string | null };
-
-function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function fmtDateHeader(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    ...(sameYear ? {} : { year: "numeric" }),
-  });
-}
 
 function sameDay(a: string, b: string): boolean {
   const da = new Date(a);
@@ -379,7 +361,7 @@ function MessageBubbles({ messages }: { messages: MsgRow[] }) {
                   wordBreak: "break-word",
                   letterSpacing: "-0.005em",
                 }}
-                title={fmtTime(m.sentAt)}
+                title={fmtTimeLocale(m.sentAt)}
               >
                 {m.body || (
                   <span style={{ opacity: 0.5, fontStyle: "italic" }}>
@@ -452,7 +434,7 @@ function EmailList({ messages }: { messages: EmailRow[] }) {
               {e.direction === "outbound" ? "Sent" : "Received"}
             </span>
             <span style={{ color: "var(--ink-faint)" }}>
-              {fmtDateHeader(e.sentAt)} · {fmtTime(e.sentAt)}
+              {fmtDateHeader(e.sentAt)} · {fmtTimeLocale(e.sentAt)}
             </span>
           </div>
           {e.fromEmail && (

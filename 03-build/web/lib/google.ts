@@ -4,7 +4,10 @@
  *
  * Refs: ROADMAP M2.2, M2.9
  */
+import { eq } from "drizzle-orm";
 import { google, type Auth } from "googleapis";
+import { db } from "@/lib/db";
+import { oauthTokens, sources } from "@/db/schema";
 
 export const GOOGLE_SCOPES = [
   // Contacts (read-only directory + connections)
@@ -51,4 +54,37 @@ export function clientFromTokens(args: {
     token_type: "Bearer",
   });
   return c;
+}
+
+/** Load the stored OAuth token row for a source, shaped for clientFromTokens. */
+export async function getTokenForSource(sourceId: string) {
+  const [token] = await db
+    .select()
+    .from(oauthTokens)
+    .where(eq(oauthTokens.sourceId, sourceId))
+    .limit(1);
+  if (!token) throw new Error(`No OAuth token for source ${sourceId}`);
+  return {
+    accessToken: token.accessToken,
+    refreshToken: token.refreshToken,
+    expiresAt: token.expiresAt,
+    scopes: token.scopes,
+  };
+}
+
+/**
+ * Pull the user's own Google address from source.config.google_email, used
+ * to classify messages/events as inbound/outbound or self-attended.
+ */
+export async function getSelfEmailFromSource(
+  sourceId: string,
+): Promise<string | null> {
+  const [src] = await db
+    .select({ config: sources.config })
+    .from(sources)
+    .where(eq(sources.id, sourceId))
+    .limit(1);
+  if (!src?.config) return null;
+  const cfg = src.config as { google_email?: string };
+  return cfg.google_email?.toLowerCase() ?? null;
 }

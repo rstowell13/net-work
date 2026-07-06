@@ -15,12 +15,15 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   rawContacts,
-  oauthTokens,
   emails,
   emailThreads,
   sources,
 } from "@/db/schema";
-import { clientFromTokens } from "@/lib/google";
+import {
+  clientFromTokens,
+  getSelfEmailFromSource,
+  getTokenForSource,
+} from "@/lib/google";
 import { runImport, type ImportCounters } from "./run";
 import { parseAddressEntries } from "./parse-addresses";
 import {
@@ -49,34 +52,6 @@ function isQuotaError(err: unknown): boolean {
   return /quota|rate|exceeded|429/i.test(msg);
 }
 const HEADERS_TO_KEEP = ["From", "To", "Cc", "Subject", "Date", "Message-ID"];
-
-// Pulls the user's own gmail address from the source.config.google_email,
-// used to classify each email as inbound or outbound.
-async function getSelfEmailFromSource(sourceId: string): Promise<string | null> {
-  const [src] = await db
-    .select({ config: sources.config })
-    .from(sources)
-    .where(eq(sources.id, sourceId))
-    .limit(1);
-  if (!src?.config) return null;
-  const cfg = src.config as { google_email?: string };
-  return cfg.google_email?.toLowerCase() ?? null;
-}
-
-async function getTokenForSource(sourceId: string) {
-  const [token] = await db
-    .select()
-    .from(oauthTokens)
-    .where(eq(oauthTokens.sourceId, sourceId))
-    .limit(1);
-  if (!token) throw new Error(`No OAuth token for source ${sourceId}`);
-  return {
-    accessToken: token.accessToken,
-    refreshToken: token.refreshToken,
-    expiresAt: token.expiresAt,
-    scopes: token.scopes,
-  };
-}
 
 /**
  * Get the gmail-source-id for a user's gmail source. Used so the manual

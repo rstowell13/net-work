@@ -16,22 +16,7 @@ import { db, schema } from "@/lib/db";
 import { syncGmail, getGmailSourceForUser } from "@/lib/sync/gmail";
 import { enrichAndPromote } from "@/lib/merge/promote";
 import { relinkAfterMerge } from "@/lib/relink";
-
-function log(...a: unknown[]) {
-  console.log(new Date().toISOString(), ...a);
-}
-
-async function getOwner() {
-  const email = process.env.APP_OWNER_EMAIL;
-  if (!email) throw new Error("APP_OWNER_EMAIL not set");
-  const [u] = await db
-    .select({ id: schema.users.id, email: schema.users.email })
-    .from(schema.users)
-    .where(eq(schema.users.email, email))
-    .limit(1);
-  if (!u) throw new Error(`owner ${email} not found`);
-  return u;
-}
+import { getOwner, log } from "./_shared";
 
 async function snapshot(label: string) {
   const [r] = await db.execute(sql`

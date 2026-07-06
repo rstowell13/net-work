@@ -20,22 +20,7 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { isRoleAddress } from "@/lib/contacts/role-address";
-
-function log(...a: unknown[]) {
-  console.log(new Date().toISOString(), ...a);
-}
-
-async function getOwner() {
-  const email = process.env.APP_OWNER_EMAIL;
-  if (!email) throw new Error("APP_OWNER_EMAIL not set");
-  const [u] = await db
-    .select({ id: schema.users.id, email: schema.users.email })
-    .from(schema.users)
-    .where(eq(schema.users.email, email))
-    .limit(1);
-  if (!u) throw new Error(`owner ${email} not found`);
-  return u;
-}
+import { getOwner, log } from "./_shared";
 
 /** All emails are role addresses (and there's at least one). */
 function isRoleOnly(emails: Set<string>): boolean {

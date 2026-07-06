@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { Avatar } from "@/components/Avatar";
+import { SourceChip } from "@/components/SourceChip";
 import { requireUser } from "@/lib/auth";
 import { getPendingCandidates, getStats } from "@/lib/merge/queries";
-import { avatarColorVar, initials } from "@/lib/avatar-color";
 import {
   RunDedupeButton,
   BulkMergeButton,
@@ -287,29 +288,22 @@ function AvatarStack({
   members,
   primaryName,
 }: {
-  members: Array<{ id: string }>;
+  members: Array<{ id: string; avatarUrl: string | null }>;
   primaryName: string;
 }) {
-  const ini = initials(primaryName);
   const shown = members.slice(0, 4);
   return (
     <div className="flex items-center">
       {shown.map((m, i) => (
         <div
           key={m.id}
-          className="flex items-center justify-center rounded-full text-[11.5px] font-medium italic"
           style={{
-            width: 28,
-            height: 28,
             marginLeft: i === 0 ? 0 : -8,
-            color: "var(--stone)",
-            fontFamily:
-              "var(--font-serif, 'Source Serif 4'), Georgia, serif",
-            background: avatarColorVar(m.id),
+            borderRadius: "50%",
             boxShadow: "0 0 0 2px var(--stone-raised)",
           }}
         >
-          {ini}
+          <Avatar id={m.id} name={primaryName} photoUrl={m.avatarUrl} size="sm" />
         </div>
       ))}
     </div>
@@ -361,15 +355,11 @@ function AmbiguousCard({
         <h3 className="m-0 text-[18px] font-semibold tracking-[-0.018em]">
           {c.primaryName}
         </h3>
-        <span
-          className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.04em]"
-          style={{
-            background: "rgba(168,132,31,0.16)",
-            color: "var(--fading-yellow)",
-          }}
-        >
-          Ambiguous
-        </span>
+        <SourceChip
+          label="Ambiguous"
+          background="rgba(168,132,31,0.16)"
+          color="var(--fading-yellow)"
+        />
       </div>
 
       {c.existingContacts.length > 0 && (
@@ -389,19 +379,7 @@ function AmbiguousCard({
               borderColor: "var(--rule)",
             }}
           >
-            <div
-              className="flex items-center justify-center rounded-full text-[11px] font-medium italic"
-              style={{
-                width: 28,
-                height: 28,
-                color: "var(--stone)",
-                fontFamily:
-                  "var(--font-serif, 'Source Serif 4'), Georgia, serif",
-                background: avatarColorVar(m.id),
-              }}
-            >
-              {initials(m.name)}
-            </div>
+            <Avatar id={m.id} name={m.name} photoUrl={m.avatarUrl} size="sm" />
             <div className="flex min-w-0 flex-col gap-px">
               <span
                 className="text-[9.5px] font-semibold uppercase tracking-[0.06em]"

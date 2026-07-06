@@ -18,22 +18,7 @@ import {
   findRemovableUnknownContacts,
   sweepUnknownContacts,
 } from "@/lib/contacts/unknown-contacts";
-
-function log(...a: unknown[]) {
-  console.log(new Date().toISOString(), ...a);
-}
-
-async function getOwner() {
-  const email = process.env.APP_OWNER_EMAIL;
-  if (!email) throw new Error("APP_OWNER_EMAIL not set");
-  const [u] = await db
-    .select({ id: schema.users.id, email: schema.users.email })
-    .from(schema.users)
-    .where(eq(schema.users.email, email))
-    .limit(1);
-  if (!u) throw new Error(`owner ${email} not found`);
-  return u;
-}
+import { getOwner, log } from "./_shared";
 
 async function toTriageCount(userId: string): Promise<number> {
   const [r] = await db
