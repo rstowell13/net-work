@@ -38,7 +38,7 @@ function buildEmailTranscript(
   const header = subject ? `Subject: ${subject}\n\n` : "";
   const lines = emails.map(
     (e) =>
-      `[${e.direction === "outgoing" ? "Out" : "In"} ${fmtTime(e.sentAt)}] ${
+      `[${e.direction === "outbound" ? "Out" : "In"} ${fmtTime(e.sentAt)}] ${
         (e.body ?? "").trim().slice(0, 1500) || "(empty)"
       }`,
   );

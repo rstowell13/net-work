@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { requireUser } from "@/lib/auth";
 import { getPendingCandidates, getStats } from "@/lib/merge/queries";
-import { avatarColorVar, initials } from "@/lib/merge/avatar-color";
+import { avatarColorVar, initials } from "@/lib/avatar-color";
 import {
   RunDedupeButton,
   BulkMergeButton,

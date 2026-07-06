@@ -3,8 +3,7 @@
  *
  * `nameKey` collapses common first-name nicknames to a canonical form while
  * keeping the surname exact, so "Joe Prezuti" and "Joseph Prezuti" produce the
- * same key and get grouped as a possible duplicate. `initialKey` is a looser
- * first-initial + surname key for the "look-alike" review tier.
+ * same key and get grouped as a possible duplicate.
  *
  * Nickname bridging is best-effort: every group it forms lands in the
  * "ambiguous / needs a closer look" tier (see confidence.ts), so a wrong bridge

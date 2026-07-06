@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, gte, sql, desc, inArray, isNull, isNotNull } from "drizzle-orm";
+import { and, eq, gte, sql, desc, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { computeFreshness, type FreshnessResult } from "@/lib/scoring/freshness";
 import { aggregateTags, type Tag } from "@/lib/tags/queries";
@@ -527,6 +527,3 @@ export async function getNextTriageContact(
     hiddenCount,
   };
 }
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _unused = isNotNull;

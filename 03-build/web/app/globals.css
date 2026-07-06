@@ -5,6 +5,8 @@
    Source of truth: 02-design/DESIGN_SYSTEM.md
    ============================================================ */
 :root {
+  color-scheme: light;
+
   /* Surfaces */
   --stone: #f7f4ec;
   --stone-raised: #ffffff;
@@ -70,6 +72,7 @@
 /* OS preference fallback (when user hasn't explicitly set theme) */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --stone: #1f1a14;
     --stone-raised: #2c2519;
     --stone-sunken: #3a2f23;

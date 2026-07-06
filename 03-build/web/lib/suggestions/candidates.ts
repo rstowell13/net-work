@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { listContacts } from "@/lib/contacts/queries";
 import { ensurePlan } from "@/lib/weekly-plan";
@@ -182,7 +182,3 @@ export async function getCandidates(
 
   return { cadence, candidates: ranked };
 }
-
-// keep import used in case the linter complains
-const _unused = { isNull, inArray, notInArray };
-void _unused;
