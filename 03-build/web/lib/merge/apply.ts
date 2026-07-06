@@ -12,6 +12,8 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { normalizeRaw } from "./normalize";
 import { classify } from "./confidence";
+import { pickSurvivor } from "./survivor";
+import { moveCuratedContent } from "./move-content";
 import {
   validatePartition,
   pluralityBucketIndex,
@@ -27,14 +29,6 @@ const SOURCE_PRIORITY: Record<string, number> = {
   mac_agent: 70,
   gmail: 50,
   google_calendar: 40,
-};
-
-// Survivor selection: a human's "kept" decision must outrank an untriaged or
-// skipped record.
-const TRIAGE_RANK: Record<string, number> = {
-  kept: 3,
-  to_triage: 2,
-  skipped: 1,
 };
 
 interface MemberRow {
@@ -109,6 +103,22 @@ async function createContactFromMembers(
   const memberIds = members.map((m) => m.id);
 
   return db.transaction(async (tx) => {
+    // Atomic claim: only one concurrent apply can flip pending → approved.
+    // The row lock serializes racers; the loser sees 0 rows and rolls back
+    // before creating a duplicate contact (TOCTOU guard — the pending check
+    // in applyCandidate happens outside this transaction).
+    const claimed = await tx
+      .update(schema.mergeCandidates)
+      .set({ status: "approved", updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.mergeCandidates.id, candidateId),
+          eq(schema.mergeCandidates.status, "pending"),
+        ),
+      )
+      .returning({ id: schema.mergeCandidates.id });
+    if (claimed.length === 0) throw new Error("candidate_already_resolved");
+
     const [c] = await tx
       .insert(schema.contacts)
       .values({
@@ -127,7 +137,6 @@ async function createContactFromMembers(
     await tx
       .update(schema.mergeCandidates)
       .set({
-        status: "approved",
         resultingContactId: c.id,
         resolvedAt: new Date(),
         updatedAt: new Date(),
@@ -135,174 +144,6 @@ async function createContactFromMembers(
       .where(eq(schema.mergeCandidates.id, candidateId));
     return c.id;
   });
-}
-
-/**
- * Pure survivor ranking, shared by the merge itself and the queue preview:
- * kept > to_triage > skipped, then has-category, then most raw records, then
- * oldest. Returns null for an empty list.
- */
-export function rankSurvivorId(
-  rows: {
-    id: string;
-    triageStatus: string;
-    category: string | null;
-    createdAt: Date;
-  }[],
-  rawCountById: Map<string, number>,
-): string | null {
-  if (rows.length === 0) return null;
-  const ranked = [...rows].sort((a, b) => {
-    const ta = TRIAGE_RANK[a.triageStatus] ?? 0;
-    const tb = TRIAGE_RANK[b.triageStatus] ?? 0;
-    if (tb !== ta) return tb - ta;
-    const ca = a.category ? 1 : 0;
-    const cb = b.category ? 1 : 0;
-    if (cb !== ca) return cb - ca;
-    const na = rawCountById.get(a.id) ?? 0;
-    const nb = rawCountById.get(b.id) ?? 0;
-    if (nb !== na) return nb - na;
-    return a.createdAt.getTime() - b.createdAt.getTime();
-  });
-  return ranked[0].id;
-}
-
-/**
- * Choose which saved contact survives a merge. Returns null if none of the
- * referenced contacts are still live.
- */
-export async function pickSurvivor(
-  userId: string,
-  contactIds: string[],
-): Promise<{ survivorId: string; loserIds: string[] } | null> {
-  const rows = await db
-    .select({
-      id: schema.contacts.id,
-      triageStatus: schema.contacts.triageStatus,
-      category: schema.contacts.category,
-      createdAt: schema.contacts.createdAt,
-    })
-    .from(schema.contacts)
-    .where(
-      and(
-        eq(schema.contacts.userId, userId),
-        inArray(schema.contacts.id, contactIds),
-        isNull(schema.contacts.deletedAt),
-      ),
-    );
-  if (rows.length === 0) return null;
-
-  const counts = await db
-    .select({
-      contactId: schema.rawContacts.contactId,
-      n: sql<number>`count(*)::int`,
-    })
-    .from(schema.rawContacts)
-    .where(inArray(schema.rawContacts.contactId, contactIds))
-    .groupBy(schema.rawContacts.contactId);
-  const countMap = new Map<string, number>(
-    counts.map((c) => [c.contactId as string, c.n]),
-  );
-
-  const survivorId = rankSurvivorId(rows, countMap);
-  if (!survivorId) return null;
-  // Losers = every other referenced contact (even any already soft-deleted by a
-  // race), so their records all get swept onto the survivor.
-  const loserIds = contactIds.filter((id) => id !== survivorId);
-  return { survivorId, loserIds };
-}
-
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-/**
- * Move a contact's curated, contact-level content (tags, follow-ups, notes,
- * scores, plan items, summaries, score history) from one or more source contacts
- * onto a target, handling the PK/unique-constrained tables. Diary
- * (messages/emails/calls/calendar) is keyed by handle and handled separately by
- * the caller (moved directly, or nulled + relinked).
- */
-async function moveCuratedContent(
-  tx: Tx,
-  fromContactIds: string[],
-  toContactId: string,
-): Promise<void> {
-  if (fromContactIds.length === 0) return;
-  const now = new Date();
-
-  // contact_tags — PK (contact_id, tag_id): add only tags the target lacks.
-  const targetTags = await tx
-    .select({ tagId: schema.contactTags.tagId })
-    .from(schema.contactTags)
-    .where(eq(schema.contactTags.contactId, toContactId));
-  const targetSet = new Set(targetTags.map((t) => t.tagId));
-  const fromTags = await tx
-    .select({ tagId: schema.contactTags.tagId })
-    .from(schema.contactTags)
-    .where(inArray(schema.contactTags.contactId, fromContactIds));
-  const addTags = [...new Set(fromTags.map((t) => t.tagId))].filter(
-    (t) => !targetSet.has(t),
-  );
-  await tx
-    .delete(schema.contactTags)
-    .where(inArray(schema.contactTags.contactId, fromContactIds));
-  if (addTags.length > 0) {
-    await tx
-      .insert(schema.contactTags)
-      .values(addTags.map((tagId) => ({ contactId: toContactId, tagId })));
-  }
-
-  // Plain moves (no uniqueness on contact_id).
-  await tx
-    .update(schema.followUps)
-    .set({ contactId: toContactId, updatedAt: now })
-    .where(inArray(schema.followUps.contactId, fromContactIds));
-  await tx
-    .update(schema.notes)
-    .set({ contactId: toContactId, updatedAt: now })
-    .where(inArray(schema.notes.contactId, fromContactIds));
-
-  // Derived tables — drop; they regenerate.
-  await tx
-    .delete(schema.suggestionState)
-    .where(inArray(schema.suggestionState.contactId, fromContactIds));
-  await tx
-    .delete(schema.relationshipSummaries)
-    .where(inArray(schema.relationshipSummaries.contactId, fromContactIds));
-
-  // weekly_plan_items — UNIQUE (plan_id, contact_id): move one per plan the
-  // target isn't already in; drop the rest.
-  const targetPlans = await tx
-    .select({ planId: schema.weeklyPlanItems.planId })
-    .from(schema.weeklyPlanItems)
-    .where(eq(schema.weeklyPlanItems.contactId, toContactId));
-  const claimed = new Set(targetPlans.map((p) => p.planId));
-  const items = await tx
-    .select({
-      id: schema.weeklyPlanItems.id,
-      planId: schema.weeklyPlanItems.planId,
-    })
-    .from(schema.weeklyPlanItems)
-    .where(inArray(schema.weeklyPlanItems.contactId, fromContactIds));
-  const moveItemIds: string[] = [];
-  const dropItemIds: string[] = [];
-  for (const it of items) {
-    if (claimed.has(it.planId)) dropItemIds.push(it.id);
-    else {
-      claimed.add(it.planId);
-      moveItemIds.push(it.id);
-    }
-  }
-  if (moveItemIds.length > 0) {
-    await tx
-      .update(schema.weeklyPlanItems)
-      .set({ contactId: toContactId })
-      .where(inArray(schema.weeklyPlanItems.id, moveItemIds));
-  }
-  if (dropItemIds.length > 0) {
-    await tx
-      .delete(schema.weeklyPlanItems)
-      .where(inArray(schema.weeklyPlanItems.id, dropItemIds));
-  }
 }
 
 /**
@@ -373,6 +214,22 @@ export async function mergeIntoSurvivor(
   await db.transaction(async (tx) => {
     const now = new Date();
 
+    // 0. Atomic claim when applying a stored candidate — see
+    //    createContactFromMembers for the race this guards against.
+    if (opts.candidateId) {
+      const claimed = await tx
+        .update(schema.mergeCandidates)
+        .set({ status: "approved", updatedAt: now })
+        .where(
+          and(
+            eq(schema.mergeCandidates.id, opts.candidateId),
+            eq(schema.mergeCandidates.status, "pending"),
+          ),
+        )
+        .returning({ id: schema.mergeCandidates.id });
+      if (claimed.length === 0) throw new Error("candidate_already_resolved");
+    }
+
     // 1. Move raw records — ALL records of the loser contacts (not just the
     //    matched ones, or they'd orphan when the loser is soft-deleted) plus any
     //    loose member records.
@@ -441,12 +298,11 @@ export async function mergeIntoSurvivor(
       })
       .where(eq(schema.contacts.id, survivorId));
 
-    // 8. Mark the candidate approved when applying a stored candidate.
+    // 8. Record the merge result on the claimed candidate.
     if (opts.candidateId) {
       await tx
         .update(schema.mergeCandidates)
         .set({
-          status: "approved",
           resultingContactId: survivorId,
           resolvedAt: now,
           updatedAt: now,
@@ -577,6 +433,8 @@ export async function splitCandidate(
       and(
         eq(schema.mergeCandidates.id, candidateId),
         eq(schema.mergeCandidates.userId, userId),
+        // Never demote an already-approved candidate to split (stale UI race).
+        eq(schema.mergeCandidates.status, "pending"),
       ),
     );
 }
@@ -711,6 +569,20 @@ export async function partitionCandidate(
   await db.transaction(async (tx) => {
     const now = new Date();
 
+    // 0. Atomic claim (pending → split) — serializes a concurrent approve or
+    //    double-submitted partition; the loser rolls back before moving data.
+    const claimed = await tx
+      .update(schema.mergeCandidates)
+      .set({ status: "split", resolvedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(schema.mergeCandidates.id, candidateId),
+          eq(schema.mergeCandidates.status, "pending"),
+        ),
+      )
+      .returning({ id: schema.mergeCandidates.id });
+    if (claimed.length === 0) throw new Error("candidate_already_resolved");
+
     // 1. Resolve a survivor per bucket (create new where needed) + reassign
     //    exactly that bucket's records to it.
     survivorIds = [];
@@ -810,16 +682,12 @@ export async function partitionCandidate(
         .where(inArray(schema.contacts.id, toDelete));
     }
 
-    // 5. Mark candidate "split" — records the decision AND suppresses this exact
-    //    group from re-surfacing on the next re-scan (groupKey suppression).
+    // 5. Record the primary result. (Status was already claimed as "split" in
+    //    step 0; split status also suppresses the group's pairs on re-scan —
+    //    see suppressionPairs in grouping.ts.)
     await tx
       .update(schema.mergeCandidates)
-      .set({
-        status: "split",
-        resolvedAt: now,
-        updatedAt: now,
-        resultingContactId: survivorIds[primaryIdx] ?? null,
-      })
+      .set({ resultingContactId: survivorIds[primaryIdx] ?? null })
       .where(eq(schema.mergeCandidates.id, candidateId));
   });
 

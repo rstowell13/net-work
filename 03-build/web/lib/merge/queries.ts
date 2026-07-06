@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
-import { rankSurvivorId } from "./apply";
+import { rankSurvivorId } from "./survivor-rank";
 
 export interface CandidateView {
   id: string;

@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   groupDuplicates,
-  groupKey,
+  pairKey,
+  suppressionPairs,
   type DedupeRawInput,
 } from "@/lib/merge/grouping";
 
@@ -165,7 +166,7 @@ describe("groupDuplicates", () => {
       r({ id: "b", contactId: "cB", name: "Joseph Presutti", emails: ["jp@k2.com"] }),
     ];
     expect(groupDuplicates(rows)).toHaveLength(1); // would normally resurface
-    const suppressed = new Set([groupKey(["a", "b"])]);
+    const suppressed = suppressionPairs([["a", "b"]]);
     expect(groupDuplicates(rows, new Set(), suppressed)).toHaveLength(0);
   });
 
@@ -174,7 +175,41 @@ describe("groupDuplicates", () => {
       r({ id: "a", name: "Joe Prezuti", emails: ["x@y.com"] }),
       r({ id: "b", name: "Joe Prezuti", emails: ["x@y.com"] }),
     ];
-    const suppressed = new Set([groupKey(["c", "d"])]); // a different group
+    const suppressed = suppressionPairs([["c", "d"]]); // a different group
     expect(groupDuplicates(rows, new Set(), suppressed)).toHaveLength(1);
+  });
+
+  it("split decision sticks on plain re-scan (identical cluster)", () => {
+    // Pre-fix regression: suppression keyed on the exact sorted id-set. Any
+    // change to cluster composition resurrected the rejected group.
+    const rows = [
+      r({ id: "a", contactId: "cA", name: "Joseph Presutti", emails: ["jp@nexfab.com"] }),
+      r({ id: "b", contactId: "cB", name: "Joseph Presutti", emails: ["jp@k2.com"] }),
+    ];
+    // Same records, re-scanned: nothing resurfaces.
+    expect(
+      groupDuplicates(rows, new Set(), suppressionPairs([["a", "b"]])),
+    ).toHaveLength(0);
+  });
+
+  it("a rejected pair re-bridged by NEW evidence surfaces only as ambiguous", () => {
+    const rows = [
+      r({ id: "a", contactId: "cA", name: "Joseph Presutti", emails: ["jp@nexfab.com"] }),
+      r({ id: "b", contactId: "cB", name: "Joseph Presutti", emails: ["jp@k2.com"] }),
+      // New record: shares a real identifier with `a`, and its name key also
+      // bridges to `b` — transitively reuniting the rejected pair.
+      r({ id: "c", name: "Joseph Presutti", emails: ["jp@nexfab.com"] }),
+    ];
+    const suppressed = suppressionPairs([["a", "b"]]);
+    const groups = groupDuplicates(rows, new Set(), suppressed);
+    expect(groups).toHaveLength(1);
+    expect(new Set(groups[0].rawContactIds)).toEqual(new Set(["a", "b", "c"]));
+    // Never auto-mergeable: the user already rejected a↔b.
+    expect(groups[0].confidence).toBe("ambiguous");
+    expect(groups[0].signals.containsRejectedPair).toBe(true);
+  });
+
+  it("pairKey is order-insensitive", () => {
+    expect(pairKey("x", "y")).toBe(pairKey("y", "x"));
   });
 });

@@ -26,6 +26,12 @@ export interface ConfidenceResult {
     /** Set when names match only after nickname canonicalization (e.g. Joe↔Joseph). */
     sharedNameKey: string | null;
     fieldConflicts: string[];
+    /**
+     * Set when the group contains a pair the user previously rejected
+     * (split/skipped) and only NEW evidence re-connected it — forces the
+     * confidence to "ambiguous" so it can never auto-merge again.
+     */
+    containsRejectedPair?: boolean;
   };
 }
 

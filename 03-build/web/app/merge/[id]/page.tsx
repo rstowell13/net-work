@@ -5,7 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { requireUser } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 import { avatarColorVar, initials } from "@/lib/merge/avatar-color";
-import { pickSurvivor } from "@/lib/merge/apply";
+import { pickSurvivor } from "@/lib/merge/survivor";
 import { AmbiguousActions } from "@/components/merge/MergeActions";
 import { PartitionEditor } from "@/components/merge/PartitionEditor";
 

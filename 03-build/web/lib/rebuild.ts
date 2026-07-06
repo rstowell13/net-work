@@ -151,6 +151,7 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
       ),
     )
     .limit(MERGE_BATCH);
+  let mergeFailures = 0;
   if (safe.length > 0) {
     // Skip the per-merge relink here — the final pass does one global relink.
     const merged = await bulkApply(
@@ -158,11 +159,25 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
       safe.map((c) => c.id),
       { relink: false },
     );
-    return {
-      phase: "merging",
-      done: false,
-      detail: `Merging duplicates (${merged.applied})`,
-    };
+    mergeFailures = merged.failed;
+    if (merged.failed > 0) {
+      console.error(
+        `rebuild: ${merged.failed}/${safe.length} safe merges failed`,
+        merged.errors.slice(0, 5),
+      );
+    }
+    // Only stay in the merging phase while we're making progress. If EVERY
+    // candidate in the batch failed, returning "merging" would re-select the
+    // identical batch next pass (runDedupe recreates pending candidates each
+    // pass) and the button/cron loop would spin forever. Fall through to
+    // finalize instead; the next full rebuild retries them once.
+    if (merged.applied > 0) {
+      return {
+        phase: "merging",
+        done: false,
+        detail: `Merging duplicates (${merged.applied})`,
+      };
+    }
   }
 
   // No safe merges left → finalize: enrich + one global relink.
@@ -188,6 +203,7 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
       emailsLinked: relink.totals.emails,
       unknownRemoved,
       businessRemoved,
+      ...(mergeFailures > 0 ? { mergeFailures } : {}),
     },
   };
 }
