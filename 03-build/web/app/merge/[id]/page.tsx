@@ -4,7 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { AppShell } from "@/components/AppShell";
 import { requireUser } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
-import { avatarColorVar, initials } from "@/lib/merge/avatar-color";
+import { avatarColorVar, initials } from "@/lib/avatar-color";
 import { pickSurvivor } from "@/lib/merge/apply";
 import { AmbiguousActions } from "@/components/merge/MergeActions";
 import { PartitionEditor } from "@/components/merge/PartitionEditor";
