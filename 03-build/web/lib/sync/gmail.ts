@@ -11,7 +11,7 @@
  * Refs: ROADMAP M2.4
  */
 import { google } from "googleapis";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   rawContacts,
@@ -86,8 +86,12 @@ async function getTokenForSource(sourceId: string) {
  * sync endpoint doesn't have to re-do the lookup.
  */
 export async function getGmailSourceForUser(userId: string) {
-  const allRows = await db.select().from(sources).where(eq(sources.userId, userId));
-  return allRows.find((s) => s.kind === "gmail") ?? null;
+  const [row] = await db
+    .select({ id: sources.id, config: sources.config })
+    .from(sources)
+    .where(and(eq(sources.userId, userId), eq(sources.kind, "gmail")))
+    .limit(1);
+  return row ?? null;
 }
 
 // ============================================================

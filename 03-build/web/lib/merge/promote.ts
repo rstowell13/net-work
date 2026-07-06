@@ -19,7 +19,7 @@
  * Refs: plan Phase 1, Step 3.
  */
 import "server-only";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, arrayOverlaps, eq, inArray, isNull, or } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { normalizeName } from "./normalize";
 import { qualifiesForPromotion } from "./promote-criteria";
@@ -154,22 +154,29 @@ export async function enrichAndPromote(
     }
   }
 
-  // 3. Two-way interaction counts for the create-new candidates. Fetch the
-  // email directions/addresses ONCE and count in memory — the previous
-  // per-chunk `unnest(to_emails)` aggregation seq-scanned the whole emails
-  // table several times and stalled on a large mailbox.
+  // 3. Two-way interaction counts for the create-new candidates. Bounded to
+  // the wanted addresses via from_email = ANY(...) (indexed, migration 0008)
+  // for inbound plus an array-overlap condition on to_emails for outbound —
+  // instead of pulling the entire emails table into JS to filter/count.
   if (createNew.length > 0) {
     const wanted = new Set(createNew.map((c) => c.email));
+    const wantedArr = [...wanted];
     const inbound = new Map<string, number>();
     const outbound = new Map<string, number>();
-    const allEmails = await db
+    const boundedEmails = await db
       .select({
         direction: schema.emails.direction,
         fromEmail: schema.emails.fromEmail,
         toEmails: schema.emails.toEmails,
       })
-      .from(schema.emails);
-    for (const e of allEmails) {
+      .from(schema.emails)
+      .where(
+        or(
+          inArray(schema.emails.fromEmail, wantedArr),
+          arrayOverlaps(schema.emails.toEmails, wantedArr),
+        ),
+      );
+    for (const e of boundedEmails) {
       if (e.direction === "inbound") {
         const f = e.fromEmail?.toLowerCase();
         if (f && wanted.has(f)) inbound.set(f, (inbound.get(f) ?? 0) + 1);
