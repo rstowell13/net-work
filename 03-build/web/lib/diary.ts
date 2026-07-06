@@ -1,5 +1,5 @@
 import "server-only";
-import { and, arrayOverlaps, count, desc, eq } from "drizzle-orm";
+import { and, arrayOverlaps, count, desc, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { normalizeHandle } from "@/lib/handles";
 
@@ -239,6 +239,48 @@ export async function getDiary(
   return {
     entries: out.sort((a, b) => b.when.getTime() - a.when.getTime()),
     groupThreadCount,
+  };
+}
+
+/**
+ * Cheap proxy for "have this contact's relationship-summary inputs changed
+ * since the cached summary was generated" — one aggregate query (counts +
+ * max(sent_at) for 1-on-1 messages and emails), no message/email bodies.
+ * Contrast with getRelationshipInputs below, which hydrates up to 4,000 full
+ * bodies and previously ran on every page view just to compute a cache key.
+ *
+ * Deliberately narrower than the full inputs set: it does NOT react to
+ * notes, calls, calendar events, or thread-summary edits changing — only new
+ * messages/emails trigger regeneration. That's an intentional cost-control
+ * tradeoff (see lib/llm/summary.ts staleness-key comment).
+ */
+export async function getRelationshipStalenessInputs(contactId: string) {
+  const [[msgAgg], [emailAgg]] = await Promise.all([
+    db
+      .select({
+        count: sql<number>`count(*)::int`,
+        lastAt: sql<Date | null>`max(${schema.messages.sentAt})`,
+      })
+      .from(schema.messages)
+      .where(
+        and(
+          eq(schema.messages.contactId, contactId),
+          eq(schema.messages.isGroup, false),
+        ),
+      ),
+    db
+      .select({
+        count: sql<number>`count(*)::int`,
+        lastAt: sql<Date | null>`max(${schema.emails.sentAt})`,
+      })
+      .from(schema.emails)
+      .where(eq(schema.emails.contactId, contactId)),
+  ]);
+  return {
+    messageCount: msgAgg?.count ?? 0,
+    lastMessageAt: msgAgg?.lastAt ? new Date(msgAgg.lastAt) : null,
+    emailCount: emailAgg?.count ?? 0,
+    lastEmailAt: emailAgg?.lastAt ? new Date(emailAgg.lastAt) : null,
   };
 }
 
