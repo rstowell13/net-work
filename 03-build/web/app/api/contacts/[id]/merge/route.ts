@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth";
+import { ApiError, handleApi, mergeErrorToApiError, requireUserApi } from "@/lib/api";
 import { mergeContacts } from "@/lib/merge/apply";
 
 export const runtime = "nodejs";
@@ -10,21 +10,21 @@ export const maxDuration = 60;
  * page the user is on; `otherId` is the duplicate they picked. `keep` chooses
  * the survivor ("current" = this page, the default; "other" = the picked one).
  */
-export async function POST(
+export const POST = handleApi(async (
   req: Request,
   context: { params: Promise<{ id: string }> },
-) {
-  const user = await requireUser();
+) => {
+  const user = await requireUserApi();
   const { id } = await context.params;
 
   let body: { otherId?: string; keep?: "current" | "other" };
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    throw new ApiError("invalid_body", 400);
   }
   if (!body.otherId) {
-    return NextResponse.json({ error: "missing_otherId" }, { status: 400 });
+    throw new ApiError("missing_otherId", 400);
   }
 
   const keepId = body.keep === "other" ? body.otherId : id;
@@ -34,6 +34,6 @@ export async function POST(
     const result = await mergeContacts(user.id, keepId, mergeId);
     return NextResponse.json(result);
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    throw mergeErrorToApiError(e);
   }
-}
+});

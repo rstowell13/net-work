@@ -7,13 +7,13 @@
  * pre-templated, ready to paste into Terminal.
  */
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth";
+import { handleApi, requireUserApi } from "@/lib/api";
 import { issueAgentToken } from "@/lib/agent-token";
 
 export const runtime = "nodejs";
 
-export async function POST(request: Request) {
-  const user = await requireUser();
+export const POST = handleApi(async (request: Request) => {
+  const user = await requireUserApi();
   const { plaintext } = await issueAgentToken({ userId: user.id });
 
   // Resolve the public origin from the incoming request URL.
@@ -24,4 +24,4 @@ export async function POST(request: Request) {
   const command = `curl -fsSL ${installerUrl} | NETWORK_AGENT_TOKEN=${plaintext} NETWORK_API_BASE=${origin} bash`;
 
   return NextResponse.json({ command, plaintext });
-}
+});

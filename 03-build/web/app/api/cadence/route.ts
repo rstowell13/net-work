@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth";
+import { handleApi, requireUserApi } from "@/lib/api";
 import { getCadence, upsertCadence } from "@/lib/suggestions/candidates";
 
 export const runtime = "nodejs";
 
-export async function GET() {
-  const user = await requireUser();
+export const GET = handleApi(async () => {
+  const user = await requireUserApi();
   return NextResponse.json(await getCadence(user.id));
-}
+});
 
-export async function POST(req: Request) {
-  const user = await requireUser();
+export const POST = handleApi(async (req: Request) => {
+  const user = await requireUserApi();
   const body = (await req.json()) as Partial<{
     targetPerWeek: number;
     personalPct: number;
@@ -18,4 +18,4 @@ export async function POST(req: Request) {
   }>;
   const next = await upsertCadence(user.id, body);
   return NextResponse.json(next);
-}
+});

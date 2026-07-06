@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { and, eq, isNull } from "drizzle-orm";
-import { requireUser } from "@/lib/auth";
+import { ApiError, handleApi, requireUserApi } from "@/lib/api";
 import { db, schema } from "@/lib/db";
 import type { CadenceWindow } from "@/lib/suggestions/tag-cadence";
 
@@ -12,15 +12,15 @@ const WINDOWS: CadenceWindow[] = ["week", "month", "quarter"];
  * Upsert a per-tag outreach goal. One rule per tag (delete-then-insert).
  * A targetCount of 0 just removes the goal.
  */
-export async function POST(req: Request) {
-  const user = await requireUser();
+export const POST = handleApi(async (req: Request) => {
+  const user = await requireUserApi();
   const body = (await req.json()) as {
     tagId?: string;
     targetCount?: number;
     window?: string;
   };
   if (!body.tagId) {
-    return NextResponse.json({ error: "no_tag" }, { status: 400 });
+    throw new ApiError("no_tag", 400);
   }
 
   const [tag] = await db
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       ),
     )
     .limit(1);
-  if (!tag) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (!tag) throw new ApiError("not_found", 404);
 
   await db
     .delete(schema.tagCadenceRules)
@@ -58,4 +58,4 @@ export async function POST(req: Request) {
     });
   }
   return NextResponse.json({ ok: true });
-}
+});
