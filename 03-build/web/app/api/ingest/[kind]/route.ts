@@ -19,7 +19,11 @@ import { db } from "@/lib/db";
 import { sources } from "@/db/schema";
 import { validateAgentToken } from "@/lib/agent-token";
 import { runImport } from "@/lib/sync/run";
-import { relinkAfterMerge, relinkThreadsByHandles } from "@/lib/relink";
+import {
+  relinkAfterMerge,
+  relinkCallsByHandles,
+  relinkThreadsByHandles,
+} from "@/lib/relink";
 import {
   ingestContacts,
   ingestMessages,
@@ -88,12 +92,12 @@ export async function POST(
   }
 
   // After ingest, relink dangling diary rows so the diary view actually
-  // shows the new data. Messages batches (many per night) get a relink
-  // SCOPED to the batch's thread handles — the global scan used to run once
+  // shows the new data. Messages and calls batches (many per night) get a
+  // relink SCOPED to the batch's handles — the global scan used to run once
   // per batch and never shrank. Contacts batches (few, and their new
   // handles can claim OLD dangling rows anywhere) keep the global pass.
   // Swallow errors — a slow relink must never fail the ingest.
-  if (result.status === "success" && (kind === "messages" || kind === "contacts")) {
+  if (result.status === "success") {
     try {
       const src = await db
         .select({ userId: sources.userId })
@@ -109,6 +113,12 @@ export async function POST(
           await relinkThreadsByHandles(
             src[0].userId,
             batchHandles.filter((h): h is string => !!h),
+          );
+        } else if (kind === "calls") {
+          const calls = body.batch as { handle?: string | null }[];
+          await relinkCallsByHandles(
+            src[0].userId,
+            calls.map((c) => c.handle).filter((h): h is string => !!h),
           );
         } else {
           await relinkAfterMerge(src[0].userId);

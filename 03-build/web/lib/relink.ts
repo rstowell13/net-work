@@ -405,6 +405,63 @@ export async function relinkThreadsByHandles(
 }
 
 /**
+ * Same idea for call logs — used by the mac-agent's calls batches so a
+ * night's calls appear on contact pages immediately instead of waiting for
+ * the next global relink (pre-2026-07, calls relied on the messages
+ * batches' global pass as a side effect).
+ */
+export async function relinkCallsByHandles(
+  userId: string,
+  handles: string[],
+): Promise<{ callLogs: number }> {
+  const out = { callLogs: 0 };
+  const wanted = [...new Set(handles.filter((h): h is string => !!h))];
+  if (wanted.length === 0) return out;
+
+  const selfEmails = await getSelfEmails(userId);
+  const raws = await db
+    .select({
+      contactId: schema.rawContacts.contactId,
+      emails: schema.rawContacts.emails,
+      phones: schema.rawContacts.phones,
+    })
+    .from(schema.rawContacts)
+    .innerJoin(
+      schema.contacts,
+      eq(schema.contacts.id, schema.rawContacts.contactId),
+    )
+    .where(eq(schema.contacts.userId, userId));
+  const maps = buildHandleMaps(raws, selfEmails);
+
+  const dangling = await db
+    .select({ id: schema.callLogs.id, handle: schema.callLogs.handle })
+    .from(schema.callLogs)
+    .where(
+      and(
+        isNull(schema.callLogs.contactId),
+        inArray(schema.callLogs.handle, wanted),
+      ),
+    );
+
+  const byContact = new Map<string, string[]>();
+  for (const c of dangling) {
+    const cid = matchCallHandle(c.handle, maps);
+    if (!cid) continue;
+    const arr = byContact.get(cid) ?? [];
+    arr.push(c.id);
+    byContact.set(cid, arr);
+  }
+  for (const [cid, ids] of byContact) {
+    await db
+      .update(schema.callLogs)
+      .set({ contactId: cid })
+      .where(inArray(schema.callLogs.id, ids));
+    out.callLogs += ids.length;
+  }
+  return out;
+}
+
+/**
  * Bulk relink for every contact owned by a user.
  *
  * Single-pass approach — much cheaper than calling relinkContact per

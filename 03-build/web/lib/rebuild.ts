@@ -53,13 +53,22 @@ async function loadGoogleSources(userId: string) {
 
 export async function runRebuildPass(userId: string): Promise<RebuildPass> {
   const rows = await loadGoogleSources(userId);
+  // Backfill progress lives under a per-kind config key: gmail uses
+  // `backfill_complete`, calendar uses `calendar_backfill_complete`
+  // (lib/sync/calendar-watermark.ts). Contacts has no chunked backfill.
+  const backfillComplete = (kind: string, cfg: unknown): boolean => {
+    const c = cfg as {
+      backfill_complete?: boolean;
+      calendar_backfill_complete?: boolean;
+    } | null;
+    if (kind === "google_calendar") return c?.calendar_backfill_complete === true;
+    return c?.backfill_complete === true;
+  };
   const states: SourceState[] = rows.map((r) => ({
     id: r.id,
     kind: r.kind,
     status: r.status,
-    backfillComplete:
-      (r.config as { backfill_complete?: boolean } | null)
-        ?.backfill_complete === true,
+    backfillComplete: backfillComplete(r.kind, r.config),
     lastSyncAt: r.lastSyncAt,
   }));
 
@@ -129,6 +138,31 @@ export async function runRebuildPass(userId: string): Promise<RebuildPass> {
         detail: `Fetching new mail · ${g.accountEmail || "account"}`,
         syncedThreads: seenThreads,
       };
+    }
+  }
+
+  // Incremental calendar pass (updatedMin — cheap, usually zero events).
+  // Without this, calendar only ever synced during its initial backfill and
+  // then went permanently stale until a manual "Sync now".
+  const calendarRows = rows.filter(
+    (r) =>
+      r.kind === "google_calendar" &&
+      r.status !== "needs_reauth" &&
+      backfillComplete(r.kind, r.config),
+  );
+  for (const c of calendarRows) {
+    try {
+      const r = await syncGoogleCalendar(c.id);
+      if (r.recordsNew > 0) {
+        return {
+          phase: "syncing",
+          done: false,
+          detail: `Fetching calendar changes · ${c.accountEmail || "account"}`,
+          syncedThreads: r.recordsSeen,
+        };
+      }
+    } catch (e) {
+      console.error("rebuild: incremental calendar failed", c.id, e);
     }
   }
 

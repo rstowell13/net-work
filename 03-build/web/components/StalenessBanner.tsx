@@ -6,14 +6,29 @@
  * when healthy. Dismissal is per-session (sessionStorage) — reappears on
  * the next browser session if the underlying issue is still there.
  */
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
 
 const DISMISS_KEY = "staleness-banner-dismissed";
 
-function wasDismissed(): boolean {
-  if (typeof window === "undefined") return false;
+// Tiny external store over sessionStorage. useSyncExternalStore hydrates
+// with the SERVER snapshot (false → banner visible, matching the server
+// HTML) and re-syncs to the client snapshot after mount — no hydration
+// mismatch (reading sessionStorage in the initial state caused one), and
+// no setState-in-effect.
+let dismissListeners: (() => void)[] = [];
+function subscribeDismiss(listener: () => void) {
+  dismissListeners.push(listener);
+  return () => {
+    dismissListeners = dismissListeners.filter((l) => l !== listener);
+  };
+}
+function isDismissed() {
   return sessionStorage.getItem(DISMISS_KEY) === "1";
+}
+function dismiss() {
+  sessionStorage.setItem(DISMISS_KEY, "1");
+  for (const l of dismissListeners) l();
 }
 
 export function StalenessBanner({
@@ -23,9 +38,11 @@ export function StalenessBanner({
   stale: boolean;
   reasons: string[];
 }) {
-  // Lazy initializer reads sessionStorage once on mount (client-only via the
-  // typeof window guard) — no effect needed, so no flash and no extra render.
-  const [dismissed, setDismissed] = useState(wasDismissed);
+  const dismissed = useSyncExternalStore(
+    subscribeDismiss,
+    isDismissed,
+    () => false,
+  );
 
   if (!stale || dismissed) return null;
 
@@ -46,10 +63,7 @@ export function StalenessBanner({
         Review sources →
       </Link>
       <button
-        onClick={() => {
-          sessionStorage.setItem(DISMISS_KEY, "1");
-          setDismissed(true);
-        }}
+        onClick={dismiss}
         aria-label="Dismiss"
         className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[14px] leading-none"
         style={{ color: "var(--madder)" }}

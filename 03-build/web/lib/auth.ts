@@ -6,6 +6,7 @@
  * session.
  */
 import "server-only";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
@@ -20,8 +21,12 @@ export async function getOwnerEmail(): Promise<string> {
 /**
  * Returns the authed user row (from our `users` table), or null.
  * Side effect: on first sign-in for the owner, lazily creates the row.
+ *
+ * React.cache()d: AppShell, requireUser, and route/page bodies all call this
+ * within one request — dedupe to a single Supabase-auth round-trip + users
+ * lookup per request instead of up to three.
  */
-export async function getCurrentUser() {
+export const getCurrentUser = cache(async function getCurrentUser() {
   const supabase = await getSupabaseServer();
   const {
     data: { user: authUser },
@@ -53,7 +58,7 @@ export async function getCurrentUser() {
     })
     .returning();
   return created;
-}
+});
 
 export async function requireUser() {
   const user = await getCurrentUser();

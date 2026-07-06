@@ -4,12 +4,15 @@
  * unit-testable without a DB — mirrors the lib/scoring/freshness.ts pattern.
  */
 import "server-only";
+import { cache } from "react";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { agentTokens, sources } from "@/db/schema";
 import { computeStaleness, type StalenessResult } from "@/lib/staleness";
 
-export async function getStalenessForUser(
+// React.cache: one staleness fetch per request even if the shell renders
+// more than once (e.g. layout + fallback trees).
+export const getStalenessForUser = cache(async function getStalenessForUser(
   userId: string,
 ): Promise<StalenessResult> {
   const sourceRows = await db
@@ -44,4 +47,4 @@ export async function getStalenessForUser(
     macAgentLastSeenAt,
     macAgentConnected: macSource?.status === "connected",
   });
-}
+});

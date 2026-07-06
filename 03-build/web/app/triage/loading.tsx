@@ -1,8 +1,8 @@
-import { AppShell } from "@/components/AppShell";
+import { AppShellStatic } from "@/components/AppShell";
 
 export default function TriageLoading() {
   return (
-    <AppShell active="/triage">
+    <AppShellStatic active="/triage">
       <main className="px-4 pb-24 pt-6 md:px-10 md:pb-16 md:pt-8">
         <h1 className="serif-display m-0 mb-6 text-[32px] leading-none md:text-[36px]">
           Triage
@@ -11,6 +11,6 @@ export default function TriageLoading() {
           Loading…
         </p>
       </main>
-    </AppShell>
+    </AppShellStatic>
   );
 }
