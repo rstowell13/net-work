@@ -166,8 +166,8 @@ All in `03-build/web` unless noted.
 - Triage aggregation redesign / score persistence.
 
 ## Status tracker (mirror in 03-build/EXECUTION_PLAN.md once P0 runs)
-- [x] P0 setup · [ ] P1 quick fixes (agent running) · [x] P2 DB migration (0008 APPLIED to live DB; 0009 written, deferred to post-deploy) · [ ] P11 ops (agent running)
-- [ ] P3 sync repairs · [ ] P4 merge engine · [ ] P10 perf wins
+- [x] P0 setup · [x] P1 quick fixes (next 16.2.10, 0 high vulns) · [x] P2 DB migration (0008 APPLIED to live DB; 0009 written, deferred to post-deploy) · [x] P11 ops (CI, error surfaces, env, Sentry; orch fixed a prod db-caching bug in review)
+- [ ] P3 sync repairs · [x] P4 merge engine (pair suppression, TOCTOU claims, rebuild loop guard, apply.ts split; 158 tests green) · [ ] P10 perf wins
 - [ ] P5 relink/freshness · [ ] P6 route consolidation · [ ] P8 UI consolidation
 - [ ] P7 ingest extraction · [ ] P9 contact page
 - [ ] P12 integration tests (stretch) · [ ] P13 review + PR + post-deploy
