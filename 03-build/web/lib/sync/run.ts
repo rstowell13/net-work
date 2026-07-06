@@ -7,7 +7,7 @@
  * Refs: ROADMAP M2.7
  */
 import { db } from "@/lib/db";
-import { eq } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import { importRuns, sources } from "@/db/schema";
 import { classifyFailureStatus } from "./auth-error";
 
@@ -23,6 +23,37 @@ export type ImportResult = ImportCounters & {
   errorMessage?: string;
 };
 
+// A Vercel timeout/OOM kills the process mid-run, leaving the import_runs
+// row stuck "running" forever with sources.lastSyncError never set (so the
+// Sources UI never shows the failure). Any run still "running" after this
+// long is dead — sweep it to "failed" before starting a new one.
+const STALE_RUN_THRESHOLD_MS = 5 * 60 * 1000;
+
+async function sweepStaleRuns(sourceId: string): Promise<void> {
+  const cutoff = new Date(Date.now() - STALE_RUN_THRESHOLD_MS);
+  const stale = await db
+    .update(importRuns)
+    .set({
+      status: "failed",
+      finishedAt: new Date(),
+      errorMessage: "interrupted",
+    })
+    .where(
+      and(
+        eq(importRuns.sourceId, sourceId),
+        eq(importRuns.status, "running"),
+        lt(importRuns.startedAt, cutoff),
+      ),
+    )
+    .returning({ id: importRuns.id });
+  if (stale.length > 0) {
+    await db
+      .update(sources)
+      .set({ lastSyncError: "interrupted", status: "error" })
+      .where(eq(sources.id, sourceId));
+  }
+}
+
 /**
  * Run a sync function inside an ImportRun envelope. The inner function
  * mutates the counters object as it goes; we persist them on completion.
@@ -31,6 +62,8 @@ export async function runImport(args: {
   sourceId: string;
   fn: (counters: ImportCounters) => Promise<void>;
 }): Promise<ImportResult> {
+  await sweepStaleRuns(args.sourceId);
+
   const counters: ImportCounters = {
     recordsSeen: 0,
     recordsNew: 0,

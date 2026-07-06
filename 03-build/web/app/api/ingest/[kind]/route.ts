@@ -188,8 +188,8 @@ async function ingestContacts(
           updatedAt: new Date(),
         },
       })
-      .returning({ id: rawContacts.id, createdAt: rawContacts.createdAt });
-    if (upserted[0]?.createdAt && Date.now() - upserted[0].createdAt.getTime() < 5_000) {
+      .returning({ id: rawContacts.id, inserted: sql<boolean>`(xmax = 0)` });
+    if (upserted[0]?.inserted) {
       counters.recordsNew += 1;
     } else {
       counters.recordsUpdated += 1;

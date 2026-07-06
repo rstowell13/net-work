@@ -7,7 +7,7 @@
  * Refs: ROADMAP M2.3
  */
 import { google } from "googleapis";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { rawContacts, oauthTokens, sources } from "@/db/schema";
 import { clientFromTokens } from "@/lib/google";
@@ -101,13 +101,13 @@ export async function syncGoogleContacts(sourceId: string) {
                 updatedAt: new Date(),
               },
             })
-            .returning({ id: rawContacts.id, createdAt: rawContacts.createdAt });
+            .returning({
+              id: rawContacts.id,
+              inserted: sql<boolean>`(xmax = 0)`,
+            });
 
           if (upserted[0]) {
-            const wasNew =
-              upserted[0].createdAt &&
-              Date.now() - upserted[0].createdAt.getTime() < 5_000;
-            if (wasNew) counters.recordsNew += 1;
+            if (upserted[0].inserted) counters.recordsNew += 1;
             else counters.recordsUpdated += 1;
           }
         }

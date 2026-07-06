@@ -23,6 +23,10 @@ import {
 import { clientFromTokens } from "@/lib/google";
 import { runImport, type ImportCounters } from "./run";
 import { parseAddressEntries } from "./parse-addresses";
+import {
+  computeGmailWatermarkUpdate,
+  type GmailWatermark,
+} from "./gmail-watermark";
 
 // Each Sync now run pulls up to MAX_THREADS_PER_RUN older threads (or
 // brand-new ones since the last sync). This keeps every run under
@@ -45,13 +49,6 @@ function isQuotaError(err: unknown): boolean {
   return /quota|rate|exceeded|429/i.test(msg);
 }
 const HEADERS_TO_KEEP = ["From", "To", "Cc", "Subject", "Date", "Message-ID"];
-
-type GmailWatermark = {
-  oldest_synced_unix?: number;
-  newest_synced_unix?: number;
-  /** Set true once we've walked all the way back to the 2-year horizon. */
-  backfill_complete?: boolean;
-};
 
 // Pulls the user's own gmail address from the source.config.google_email,
 // used to classify each email as inbound or outbound.
@@ -111,8 +108,11 @@ export async function syncGmail(sourceId: string) {
       //  - First-time run (no watermark): no q filter (oldest first via paging).
       //  - Backfill not complete: walk older — `before:<oldest_synced>`.
       //  - Backfill complete: incremental — `after:<newest_synced>`.
+      const incremental = Boolean(
+        watermark.backfill_complete && watermark.newest_synced_unix,
+      );
       let q: string;
-      if (watermark.backfill_complete && watermark.newest_synced_unix) {
+      if (incremental) {
         q = `after:${watermark.newest_synced_unix}`;
       } else if (watermark.oldest_synced_unix) {
         q = `before:${watermark.oldest_synced_unix}`;
@@ -228,14 +228,11 @@ export async function syncGmail(sourceId: string) {
             })
             .returning({
               id: emailThreads.id,
-              createdAt: emailThreads.createdAt,
+              inserted: sql<boolean>`(xmax = 0)`,
             });
           const thread = threadRows[0];
 
-          if (
-            thread.createdAt &&
-            Date.now() - thread.createdAt.getTime() < 5_000
-          ) {
+          if (thread.inserted) {
             counters.recordsNew += 1;
           } else {
             counters.recordsUpdated += 1;
@@ -362,29 +359,17 @@ export async function syncGmail(sourceId: string) {
         } // end inner for (const entry of fetched)
       } // end outer for (concurrency batches)
 
-      // Persist watermark for the next run.
-      const newWatermark: GmailWatermark = { ...watermark };
-      if (oldestSeenUnix !== null) {
-        newWatermark.oldest_synced_unix = Math.min(
-          watermark.oldest_synced_unix ?? Number.POSITIVE_INFINITY,
-          oldestSeenUnix,
-        );
-      }
-      if (newestSeenUnix !== null) {
-        newWatermark.newest_synced_unix = Math.max(
-          watermark.newest_synced_unix ?? 0,
-          newestSeenUnix,
-        );
-      }
-      // If we got fewer threads than the cap AND we weren't bailed by the
-      // time budget, we've reached the 2-year horizon.
-      if (
-        !bailedEarly &&
-        threadIds.length < MAX_THREADS_PER_RUN &&
-        !watermark.backfill_complete
-      ) {
-        newWatermark.backfill_complete = true;
-      }
+      // Persist watermark for the next run. See computeGmailWatermarkUpdate
+      // for why an incremental bail must not advance newest_synced_unix.
+      const newWatermark = computeGmailWatermarkUpdate({
+        watermark,
+        incremental,
+        bailedEarly,
+        oldestSeenUnix,
+        newestSeenUnix,
+        threadIdsLength: threadIds.length,
+        maxThreadsPerRun: MAX_THREADS_PER_RUN,
+      });
       await setWatermark(sourceId, newWatermark);
     },
   });
