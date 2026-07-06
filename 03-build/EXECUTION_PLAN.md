@@ -166,7 +166,7 @@ All in `03-build/web` unless noted.
 - Triage aggregation redesign / score persistence.
 
 ## Status tracker (mirror in 03-build/EXECUTION_PLAN.md once P0 runs)
-- [ ] P0 setup · [ ] P1 quick fixes · [ ] P2 DB migration · [ ] P11 ops
+- [x] P0 setup · [ ] P1 quick fixes (agent running) · [x] P2 DB migration (0008 APPLIED to live DB; 0009 written, deferred to post-deploy) · [ ] P11 ops (agent running)
 - [ ] P3 sync repairs · [ ] P4 merge engine · [ ] P10 perf wins
 - [ ] P5 relink/freshness · [ ] P6 route consolidation · [ ] P8 UI consolidation
 - [ ] P7 ingest extraction · [ ] P9 contact page
