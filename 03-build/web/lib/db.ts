@@ -65,11 +65,25 @@ function getDb() {
 // Proxy so existing call sites (`db.select()`, `db.insert()`, ...) work
 // unchanged, but the real client isn't constructed until the first property
 // access — which only happens once a request actually runs a query.
+//
+// Methods are bound to the REAL drizzle instance (not the proxy): drizzle
+// methods read internal state off `this`, and leaving `this` as the proxy
+// would route those internal reads/writes through the trap against the empty
+// target object. Bound-method cache keeps `db.select === db.select` stable.
+const boundCache = new Map<PropertyKey, unknown>();
 export const db: ReturnType<typeof drizzle<typeof schema>> = new Proxy(
   {} as ReturnType<typeof drizzle<typeof schema>>,
   {
-    get(_target, prop, receiver) {
-      return Reflect.get(getDb(), prop, receiver);
+    get(_target, prop) {
+      const instance = getDb();
+      const value = Reflect.get(instance, prop);
+      if (typeof value !== "function") return value;
+      let bound = boundCache.get(prop);
+      if (!bound) {
+        bound = (value as (...a: unknown[]) => unknown).bind(instance);
+        boundCache.set(prop, bound);
+      }
+      return bound;
     },
   },
 );
