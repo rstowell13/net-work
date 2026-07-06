@@ -24,6 +24,25 @@ import {
 // See lib/handles.ts for the rationale (last-10-digits collapse).
 const normalizePhone = normalizePhoneHandle;
 
+/**
+ * Build a `text[]` SQL literal from a plain JS array, as individually bound
+ * parameters (`ARRAY[$1, $2, ...]::text[]`) rather than interpolating the
+ * array itself into a `sql` template. postgres-js's tagged-template helper
+ * auto-detects a plain JS array and encodes it as a Postgres array literal,
+ * but drizzle's `sql` template goes through `client.unsafe(query, params)`
+ * instead, which does NOT get that auto-detection — the array is passed
+ * through as one opaque param and Postgres rejects it ("malformed array
+ * literal"). Binding each element separately sidesteps the driver gap
+ * entirely. Used for the `= any(...)` / `unnest(...)` checks below.
+ */
+function sqlTextArray(values: string[]) {
+  if (values.length === 0) return sql`ARRAY[]::text[]`;
+  return sql`ARRAY[${sql.join(
+    values.map((v) => sql`${v}`),
+    sql.raw(", "),
+  )}]::text[]`;
+}
+
 export interface RelinkResult {
   contactId: string;
   messageThreads: number;
@@ -254,6 +273,7 @@ export async function relinkContact(contactId: string): Promise<RelinkResult> {
   // time, so today lower() is a no-op that costs one function call per
   // dangling row — the partial emails_dangling_idx keeps the scan bounded).
   if (emailsArr.length > 0) {
+    const emailsArrSql = sqlTextArray(emailsArr);
     const updatedEmails = await db
       .update(schema.emails)
       .set({ contactId })
@@ -261,8 +281,8 @@ export async function relinkContact(contactId: string): Promise<RelinkResult> {
         and(
           isNull(schema.emails.contactId),
           or(
-            sql`lower(${schema.emails.fromEmail}) = any(${emailsArr})`,
-            sql`exists (select 1 from unnest(${schema.emails.toEmails}) as t(addr) where lower(t.addr) = any(${emailsArr}))`,
+            sql`lower(${schema.emails.fromEmail}) = any(${emailsArrSql})`,
+            sql`exists (select 1 from unnest(${schema.emails.toEmails}) as t(addr) where lower(t.addr) = any(${emailsArrSql}))`,
           ),
         ),
       )
@@ -299,7 +319,7 @@ export async function relinkContact(contactId: string): Promise<RelinkResult> {
       .where(
         and(
           isNull(schema.calendarEvents.contactId),
-          sql`exists (select 1 from unnest(${schema.calendarEvents.attendees}) as t(addr) where lower(t.addr) = any(${emailsArr}))`,
+          sql`exists (select 1 from unnest(${schema.calendarEvents.attendees}) as t(addr) where lower(t.addr) = any(${emailsArrSql}))`,
         ),
       )
       .returning({ id: schema.calendarEvents.id });
