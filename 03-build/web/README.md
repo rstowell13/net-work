@@ -101,3 +101,34 @@ npm run lint         # eslint
 
 CI (`.github/workflows/ci.yml`) runs lint, type check, tests, and build on
 every PR and on push to `main`.
+
+## Integration tests
+
+The unit suite above only covers pure functions. A separate suite
+(`tests/integration/`, config `vitest.integration.config.ts`) exercises the
+destructive, DB-touching paths against a real Postgres: the merge engine
+(`lib/merge/apply.ts`), relink (`lib/relink.ts`), and the mac-agent ingest
+pipelines (`lib/sync/mac-agent.ts`). It's excluded from the default `npx
+vitest run` / CI's main job — run it explicitly:
+
+```bash
+# 1. Start a disposable Postgres, e.g. one of:
+supabase start                                              # Supabase CLI (needs Docker)
+docker run -d -p 54329:5432 -e POSTGRES_PASSWORD=test postgres:17
+
+# 2. Point at it and create the pg_trgm extension it opportunistically uses
+#    (harness treats a missing extension as non-fatal, but creating it first
+#    avoids the warning):
+psql "postgres://postgres:test@localhost:54329/postgres" -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm;'
+
+# 3. Run the suite
+export TEST_DATABASE_URL="postgres://postgres:test@localhost:54329/postgres"
+npm run test:integration
+```
+
+The suite applies every file in `db/migrations/` (in order, skipping
+`0009_drop_dead_tables.sql`, a deferred post-deploy drop) against
+`TEST_DATABASE_URL` and truncates all tables between tests. If
+`TEST_DATABASE_URL` is unset, the whole suite is skipped with a clear message
+— it's safe to run `npm test` / `npm run test:integration` with no database
+configured.
