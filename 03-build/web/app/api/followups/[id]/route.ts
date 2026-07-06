@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
 import { and, eq, inArray } from "drizzle-orm";
-import { requireUser } from "@/lib/auth";
+import { ApiError, handleApi, requireUserApi } from "@/lib/api";
 import { db, schema } from "@/lib/db";
 
 export const runtime = "nodejs";
 
-export async function POST(
+export const POST = handleApi(async (
   req: Request,
   context: { params: Promise<{ id: string }> },
-) {
-  const user = await requireUser();
+) => {
+  const user = await requireUserApi();
   const { id } = await context.params;
   const body = (await req.json()) as {
     status?: "open" | "done" | "snoozed";
@@ -43,6 +43,6 @@ export async function POST(
     )
     .returning({ id: schema.followUps.id });
   if (res.length === 0)
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
+    throw new ApiError("not_found", 404);
   return NextResponse.json({ ok: true });
-}
+});

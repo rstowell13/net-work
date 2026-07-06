@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth";
+import { handleApi, requireUserApi } from "@/lib/api";
 import { searchAll } from "@/lib/search/queries";
 
 export const runtime = "nodejs";
@@ -8,8 +8,8 @@ export const runtime = "nodejs";
  * Typeahead endpoint for the global search bar. Returns a small, capped preview
  * (5 per group) of People / Tags / Mentions. The full results live at /search.
  */
-export async function GET(req: Request) {
-  const user = await requireUser();
+export const GET = handleApi(async (req: Request) => {
+  const user = await requireUserApi();
   const q = new URL(req.url).searchParams.get("q")?.trim() ?? "";
   if (q.length < 2) {
     return NextResponse.json({ contacts: [], tags: [], mentions: [] });
@@ -22,4 +22,4 @@ export async function GET(req: Request) {
   return NextResponse.json(results, {
     headers: { "Cache-Control": "no-store" },
   });
-}
+});

@@ -5,12 +5,12 @@
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { handleApi, requireUserApi } from "@/lib/api";
 
 export const runtime = "nodejs";
 
-export async function GET() {
-  await requireUser();
+export const GET = handleApi(async () => {
+  await requireUserApi();
   const tables = [
     { name: "messages", table: schema.messages },
     { name: "message_threads", table: schema.messageThreads },
@@ -32,4 +32,4 @@ export async function GET() {
     out[name] = row;
   }
   return NextResponse.json(out);
-}
+});

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { requireUser } from "@/lib/auth";
+import { ApiError, handleApi, requireUserApi } from "@/lib/api";
 import { db, schema } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -18,17 +18,17 @@ type Body = {
   tagId?: string;
 };
 
-export async function POST(req: Request) {
-  const user = await requireUser();
+export const POST = handleApi(async (req: Request) => {
+  const user = await requireUserApi();
   const body = (await req.json()) as Body;
   if (!Array.isArray(body?.contactIds) || body.contactIds.length === 0) {
-    return NextResponse.json({ error: "no_contacts" }, { status: 400 });
+    throw new ApiError("no_contacts", 400);
   }
 
   // Tag actions write the contact_tags join table, not the contacts row.
   if (body.action === "add_tag" || body.action === "remove_tag") {
     if (!body.tagId) {
-      return NextResponse.json({ error: "no_tag" }, { status: 400 });
+      throw new ApiError("no_tag", 400);
     }
     const [tag] = await db
       .select({ id: schema.tags.id })
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
       )
       .limit(1);
     if (!tag) {
-      return NextResponse.json({ error: "tag_not_found" }, { status: 404 });
+      throw new ApiError("tag_not_found", 404);
     }
     const owned = await db
       .select({ id: schema.contacts.id })
@@ -92,7 +92,7 @@ export async function POST(req: Request) {
       update.category = body.category ?? null;
       break;
     default:
-      return NextResponse.json({ error: "bad_action" }, { status: 400 });
+      throw new ApiError("bad_action", 400);
   }
 
   const res = await db
@@ -107,4 +107,4 @@ export async function POST(req: Request) {
     .returning({ id: schema.contacts.id });
 
   return NextResponse.json({ updated: res.length });
-}
+});

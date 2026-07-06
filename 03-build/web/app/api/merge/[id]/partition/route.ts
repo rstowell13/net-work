@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth";
+import { ApiError, handleApi, mergeErrorToApiError, requireUserApi } from "@/lib/api";
 import { partitionCandidate } from "@/lib/merge/apply";
 import type { PartitionBucket } from "@/lib/merge/partition-plan";
 
@@ -11,27 +11,27 @@ export const maxDuration = 60;
  *   { buckets: [{ keepContactId?, name?, rawIds: string[] }, ...] }
  * Each bucket becomes one contact; records left out stay on their current one.
  */
-export async function POST(
+export const POST = handleApi(async (
   _req: Request,
   context: { params: Promise<{ id: string }> },
-) {
-  const user = await requireUser();
+) => {
+  const user = await requireUserApi();
   const { id } = await context.params;
 
   let body: { buckets?: PartitionBucket[] };
   try {
     body = await _req.json();
   } catch {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    throw new ApiError("invalid_body", 400);
   }
   if (!Array.isArray(body.buckets)) {
-    return NextResponse.json({ error: "missing_buckets" }, { status: 400 });
+    throw new ApiError("missing_buckets", 400);
   }
 
   try {
     const result = await partitionCandidate(user.id, id, body.buckets);
     return NextResponse.json(result);
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    throw mergeErrorToApiError(e);
   }
-}
+});

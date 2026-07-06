@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { and, eq, isNull } from "drizzle-orm";
-import { requireUser } from "@/lib/auth";
+import { ApiError, handleApi, requireUserApi } from "@/lib/api";
 import { db, schema } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -27,34 +27,34 @@ async function authorize(userId: string, contactId: string, tagId: string) {
   return Boolean(c && t);
 }
 
-export async function POST(
+export const POST = handleApi(async (
   req: Request,
   context: { params: Promise<{ id: string }> },
-) {
-  const user = await requireUser();
+) => {
+  const user = await requireUserApi();
   const { id } = await context.params;
   const { tagId } = (await req.json()) as { tagId?: string };
-  if (!tagId) return NextResponse.json({ error: "no_tag" }, { status: 400 });
+  if (!tagId) throw new ApiError("no_tag", 400);
   if (!(await authorize(user.id, id, tagId))) {
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
+    throw new ApiError("not_found", 404);
   }
   await db
     .insert(schema.contactTags)
     .values({ contactId: id, tagId })
     .onConflictDoNothing();
   return NextResponse.json({ ok: true });
-}
+});
 
-export async function DELETE(
+export const DELETE = handleApi(async (
   req: Request,
   context: { params: Promise<{ id: string }> },
-) {
-  const user = await requireUser();
+) => {
+  const user = await requireUserApi();
   const { id } = await context.params;
   const { tagId } = (await req.json()) as { tagId?: string };
-  if (!tagId) return NextResponse.json({ error: "no_tag" }, { status: 400 });
+  if (!tagId) throw new ApiError("no_tag", 400);
   if (!(await authorize(user.id, id, tagId))) {
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
+    throw new ApiError("not_found", 404);
   }
   await db
     .delete(schema.contactTags)
@@ -65,4 +65,4 @@ export async function DELETE(
       ),
     );
   return NextResponse.json({ ok: true });
-}
+});

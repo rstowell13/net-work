@@ -5,37 +5,28 @@
  * Refs: ROADMAP M2.6
  */
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth";
+import { ApiError, handleApi, requireUserApi } from "@/lib/api";
 import { upsertSource } from "@/lib/sources";
 import { importLinkedinCsv } from "@/lib/sync/linkedin-csv";
 
 export const runtime = "nodejs";
 
-export async function POST(request: Request) {
-  const user = await requireUser();
+export const POST = handleApi(async (request: Request) => {
+  const user = await requireUserApi();
 
   const formData = await request.formData().catch(() => null);
   if (!formData) {
-    return NextResponse.json(
-      { error: "Expected multipart/form-data with a 'file' field." },
-      { status: 400 },
-    );
+    throw new ApiError("invalid_form_data", 400);
   }
 
   const file = formData.get("file");
   if (!(file instanceof File)) {
-    return NextResponse.json(
-      { error: "Missing 'file' field." },
-      { status: 400 },
-    );
+    throw new ApiError("missing_file", 400);
   }
 
   // 5MB cap — LinkedIn exports are typically <500KB.
   if (file.size > 5 * 1024 * 1024) {
-    return NextResponse.json(
-      { error: "File too large (>5MB)." },
-      { status: 413 },
-    );
+    throw new ApiError("file_too_large", 413);
   }
 
   const csvText = await file.text();
@@ -53,4 +44,4 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json(result);
-}
+});

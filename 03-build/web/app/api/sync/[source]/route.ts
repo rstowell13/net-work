@@ -15,7 +15,7 @@ import { eq, and } from "drizzle-orm";
 export const maxDuration = 60;
 export const runtime = "nodejs";
 
-import { requireUser } from "@/lib/auth";
+import { ApiError, handleApi, requireUserApi } from "@/lib/api";
 import { db } from "@/lib/db";
 import { sources } from "@/db/schema";
 import { syncGoogleContacts } from "@/lib/sync/google-contacts";
@@ -25,15 +25,15 @@ import { syncGoogleCalendar } from "@/lib/sync/google-calendar";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export async function POST(
+export const POST = handleApi(async (
   _req: Request,
   context: { params: Promise<{ source: string }> },
-) {
-  const user = await requireUser();
+) => {
+  const user = await requireUserApi();
   const { source: sourceId } = await context.params;
 
   if (!UUID_RE.test(sourceId)) {
-    return NextResponse.json({ error: "Invalid source id" }, { status: 400 });
+    throw new ApiError("invalid_source_id", 400);
   }
 
   const [src] = await db
@@ -43,7 +43,7 @@ export async function POST(
     .limit(1);
 
   if (!src) {
-    return NextResponse.json({ error: "Source not found" }, { status: 404 });
+    throw new ApiError("source_not_found", 404);
   }
 
   let result;
@@ -58,11 +58,8 @@ export async function POST(
       result = await syncGoogleCalendar(src.id);
       break;
     default:
-      return NextResponse.json(
-        { error: `Sync not supported for ${src.kind}` },
-        { status: 400 },
-      );
+      throw new ApiError("sync_not_supported", 400);
   }
 
   return NextResponse.json(result);
-}
+});

@@ -7,14 +7,14 @@
  * Refs: plan Phase 1, Step 3.
  */
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth";
+import { handleApi, requireUserApi } from "@/lib/api";
 import { enrichAndPromote } from "@/lib/merge/promote";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export async function POST() {
-  const user = await requireUser();
+export const POST = handleApi(async () => {
+  const user = await requireUserApi();
   const stats = await enrichAndPromote(user.id);
   return NextResponse.json(stats);
-}
+});
