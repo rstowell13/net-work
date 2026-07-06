@@ -78,6 +78,8 @@ const MERGE_ERROR_STATUS: Record<string, number> = {
   candidate_not_found: 404,
   contact_not_found: 404,
   survivor_not_found: 404,
+  // Atomic-claim loser (concurrent apply/partition raced this one) — conflict.
+  candidate_already_resolved: 409,
   same_contact: 400,
   need_at_least_two: 400,
   invalid_raw_id: 400,
