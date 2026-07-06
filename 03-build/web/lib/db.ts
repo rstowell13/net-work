@@ -24,8 +24,17 @@ const globalForDb = globalThis as unknown as {
 // run at module-evaluation time, or `next build` fails whenever env vars
 // are absent (e.g. CI, which builds with no secrets). Deferring to first
 // actual query means the throw only happens at request time.
+//
+// The module-level cache makes getDb() construct AT MOST ONE client per
+// process in every environment. (The globalThis cache additionally survives
+// dev HMR module re-evaluation; module scope alone is enough in prod, where
+// caching on globalThis is deliberately avoided so a stale client can't
+// outlive a serverless sandbox reuse edge case.)
+let cachedDb: ReturnType<typeof drizzle<typeof schema>> | undefined;
+
 function getDb() {
-  if (globalForDb.drizzleDb) return globalForDb.drizzleDb;
+  if (cachedDb) return cachedDb;
+  if (globalForDb.drizzleDb) return (cachedDb = globalForDb.drizzleDb);
 
   // Prefer the transaction-mode pooler (Supabase port 6543) when it's
   // configured — far higher concurrency than the session-mode pooler
@@ -48,9 +57,9 @@ function getDb() {
     });
   if (process.env.NODE_ENV !== "production") globalForDb.pgClient = client;
 
-  const instance = drizzle(client, { schema });
-  if (process.env.NODE_ENV !== "production") globalForDb.drizzleDb = instance;
-  return instance;
+  cachedDb = drizzle(client, { schema });
+  if (process.env.NODE_ENV !== "production") globalForDb.drizzleDb = cachedDb;
+  return cachedDb;
 }
 
 // Proxy so existing call sites (`db.select()`, `db.insert()`, ...) work
