@@ -1,19 +1,9 @@
-import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { Avatar } from "@/components/Avatar";
-import { TagChip } from "@/components/TagChip";
+import { SearchHitList } from "@/components/SearchHitList";
 import { requireUser } from "@/lib/auth";
-import { searchAll, type MentionSource } from "@/lib/search/queries";
+import { searchAll } from "@/lib/search/queries";
 
 export const dynamic = "force-dynamic";
-
-const SOURCE_LABEL: Record<MentionSource, string> = {
-  note: "Note",
-  email: "Email",
-  message: "Message",
-  summary: "Summary",
-  event: "Event",
-};
 
 export default async function SearchPage({
   searchParams,
@@ -53,103 +43,11 @@ export default async function SearchPage({
           <Hint>No matches for &ldquo;{query}&rdquo;. Try a different spelling or term.</Hint>
         ) : (
           <div className="flex max-w-2xl flex-col gap-8">
-            {results.contacts.length > 0 && (
-              <Section title="People">
-                {results.contacts.map((c) => (
-                  <Link key={c.id} href={`/contacts/${c.id}`} className="block">
-                    <RowShell>
-                      <Avatar id={c.id} name={c.displayName} photoUrl={c.photoUrl} size="md" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[15px]" style={{ color: "var(--ink)" }}>
-                          {c.displayName}
-                        </span>
-                        {c.primaryEmail && (
-                          <span className="block truncate text-[12.5px]" style={{ color: "var(--ink-faint)" }}>
-                            {c.primaryEmail}
-                          </span>
-                        )}
-                      </span>
-                    </RowShell>
-                  </Link>
-                ))}
-              </Section>
-            )}
-
-            {results.tags.length > 0 && (
-              <Section title="Tags">
-                {results.tags.map((t) => (
-                  <Link key={t.id} href={`/contacts?tags=${t.id}`} className="block">
-                    <RowShell>
-                      <TagChip name={t.name} color={t.color} size="md" />
-                      <span className="flex-1 text-right text-[12.5px] tabular-nums" style={{ color: "var(--ink-faint)" }}>
-                        {t.contactCount} {t.contactCount === 1 ? "contact" : "contacts"}
-                      </span>
-                    </RowShell>
-                  </Link>
-                ))}
-              </Section>
-            )}
-
-            {results.mentions.length > 0 && (
-              <Section title="Mentions">
-                {results.mentions.map((m) => (
-                  <Link key={m.contactId} href={`/contacts/${m.contactId}`} className="block">
-                    <RowShell>
-                      <Avatar id={m.contactId} name={m.displayName} photoUrl={m.photoUrl} size="md" />
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-2">
-                          <span className="truncate text-[15px]" style={{ color: "var(--ink)" }}>
-                            {m.displayName}
-                          </span>
-                          {m.matchCount > 1 && (
-                            <span className="shrink-0 text-[11.5px]" style={{ color: "var(--ink-faint)" }}>
-                              {m.matchCount} matches
-                            </span>
-                          )}
-                        </span>
-                        <span className="block truncate text-[12.5px]" style={{ color: "var(--ink-muted)" }}>
-                          {m.snippet}
-                        </span>
-                      </span>
-                      <span
-                        className="shrink-0 self-start rounded px-1.5 py-0.5 text-[10.5px] font-medium"
-                        style={{ background: "var(--stone-sunken)", color: "var(--ink-muted)" }}
-                      >
-                        {SOURCE_LABEL[m.source]}
-                      </span>
-                    </RowShell>
-                  </Link>
-                ))}
-              </Section>
-            )}
+            <SearchHitList results={results} density="comfortable" />
           </div>
         )}
       </main>
     </AppShell>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section>
-      <h2
-        className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em]"
-        style={{ color: "var(--ink-faint)" }}
-      >
-        {title}
-      </h2>
-      <div className="flex flex-col">{children}</div>
-    </section>
-  );
-}
-
-function RowShell({ children }: { children: React.ReactNode }) {
-  return (
-    <span
-      className="flex items-center gap-3 rounded-lg px-2.5 py-2.5 hover:bg-[var(--stone-raised)]"
-    >
-      {children}
-    </span>
   );
 }
 

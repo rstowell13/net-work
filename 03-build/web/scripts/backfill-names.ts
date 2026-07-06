@@ -16,23 +16,14 @@ import { getGmailSourceForUser } from "@/lib/sync/gmail";
 import { clientFromTokens } from "@/lib/google";
 import { getSelfEmails } from "@/lib/relink";
 import { parseAddressEntries } from "@/lib/sync/parse-addresses";
+import { getOwner, log } from "./_shared";
 
 const CONCURRENCY = 25;
 
-function log(...a: unknown[]) {
-  console.log(new Date().toISOString(), ...a);
-}
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
-  const email = process.env.APP_OWNER_EMAIL;
-  if (!email) throw new Error("APP_OWNER_EMAIL not set");
-  const [u] = await db
-    .select({ id: schema.users.id })
-    .from(schema.users)
-    .where(eq(schema.users.email, email))
-    .limit(1);
-  if (!u) throw new Error("owner not found");
+  const u = await getOwner();
 
   const src = await getGmailSourceForUser(u.id);
   if (!src) throw new Error("no gmail source");

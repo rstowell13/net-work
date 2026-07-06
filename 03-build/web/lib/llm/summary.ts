@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { chat, LLMConfigError } from "./client";
+import { fmtDate } from "@/lib/format-time";
 
 const SYSTEM_PROMPT_RELATIONSHIP = [
   "TASK: Write 150–300 characters about this specific person — who they are to the user, what shared context the two of you have, and what the relationship has been about. Output the text only; no preface, no greeting, no headers.",
@@ -95,10 +96,6 @@ type RawItem =
       body: string | null;
       threadId: string | null;
     };
-
-function fmtDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
 
 function renderRelationshipUserMsg(i: RelationshipInputs): string {
   const lines: string[] = [];

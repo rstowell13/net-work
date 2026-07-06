@@ -1,6 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
+import { recencyDecay } from "@/lib/scoring/freshness";
 import { escapeLike, makeSnippet } from "./text";
 
 export { escapeLike, makeSnippet } from "./text";
@@ -84,13 +85,12 @@ const SOURCE_WEIGHT: Record<MentionSource, number> = {
   event: 1,
 };
 
-/** Exponential recency decay (half-life ~125d), matching lib/scoring/freshness. */
 function recencyFactor(when: Date | string | null): number {
   if (!when) return 0.5;
   const t = when instanceof Date ? when.getTime() : new Date(when).getTime();
   if (Number.isNaN(t)) return 0.5;
   const days = Math.max(0, (Date.now() - t) / 86400_000);
-  return Math.exp(-days / 180);
+  return recencyDecay(days);
 }
 
 /** A full-text match predicate over a text expression against the query `q`. */

@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { FreshnessRing } from "@/components/FreshnessRing";
+import { SourceChip } from "@/components/SourceChip";
 import { TagChip } from "@/components/TagChip";
 import { TagPicker } from "@/components/TagPicker";
 import type { ContactListRow } from "@/lib/contacts/queries";
@@ -363,12 +364,10 @@ export function ContactsList({
                     </span>
                     <div className="flex flex-wrap items-center gap-1.5">
                       {row.category ? (
-                        <span
-                          className="rounded px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.04em]"
-                          style={catChipStyle(row.category)}
-                        >
-                          {row.category}
-                        </span>
+                        <SourceChip
+                          label={row.category}
+                          {...catChipStyle(row.category)}
+                        />
                       ) : null}
                       {row.tags.slice(0, 3).map((t) => (
                         <TagChip key={t.id} name={t.name} color={t.color} />
@@ -522,12 +521,10 @@ export function ContactsList({
                 </div>
                 <div>
                   {row.category ? (
-                    <span
-                      className="rounded px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.04em]"
-                      style={catChipStyle(row.category)}
-                    >
-                      {row.category}
-                    </span>
+                    <SourceChip
+                      label={row.category}
+                      {...catChipStyle(row.category)}
+                    />
                   ) : (
                     <span
                       className="text-[11px]"
@@ -581,7 +578,9 @@ const tbBtn =
 const tbBtnDark =
   "rounded-md border border-[var(--ink)] bg-[var(--ink)] px-3 py-1.5 text-[12.5px] font-medium text-[var(--stone)] disabled:opacity-50 hover:bg-[#2a241c]";
 
-function catChipStyle(cat: "personal" | "business" | "both"): React.CSSProperties {
+function catChipStyle(
+  cat: "personal" | "business" | "both",
+): { background: string; color: string } {
   switch (cat) {
     case "personal":
       return { background: "var(--brass-soft)", color: "var(--brass-deep)" };

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { PageContainer } from "@/components/PageContainer";
 import { TriageRulesForm } from "@/components/TriageRulesForm";
 import { requireUser } from "@/lib/auth";
 import { getTriageRules } from "@/lib/triage/rules";
@@ -11,7 +12,7 @@ export default async function TriageSettingsPage() {
   const rules = await getTriageRules(user.id);
   return (
     <AppShell active="/settings">
-      <div className="mx-auto max-w-[760px] px-4 pb-24 pt-6 md:px-14 md:pb-16 md:pt-8">
+      <PageContainer>
         <p className="mb-2 text-[12px]" style={{ color: "var(--ink-faint)" }}>
           <Link href="/settings" style={{ color: "var(--ink-muted)" }}>
             Settings
@@ -41,7 +42,7 @@ export default async function TriageSettingsPage() {
           back if you loosen the filter.
         </p>
         <TriageRulesForm initial={rules} />
-      </div>
+      </PageContainer>
     </AppShell>
   );
 }

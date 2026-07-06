@@ -1,14 +1,9 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Avatar } from "@/components/Avatar";
-import { FreshnessRing } from "@/components/FreshnessRing";
+import { ContactHeader } from "@/components/ContactHeader";
 import { TagChip } from "@/components/TagChip";
-import {
-  bandColor,
-  bandLabel,
-  computeFreshness,
-} from "@/lib/scoring/freshness";
+import { computeFreshness } from "@/lib/scoring/freshness";
 import type { Tag } from "@/lib/tags/types";
 
 interface Candidate {
@@ -170,105 +165,30 @@ export function SuggestionsFlow({ candidates, cadence }: Props) {
         className="rounded-2xl border bg-[var(--stone-raised)] p-5 md:p-9"
         style={{ borderColor: "var(--rule)" }}
       >
-        {/* Mobile header */}
-        <header className="mb-6 md:hidden">
-          <div className="flex items-center justify-between gap-4">
-            <Avatar
-              id={cur.contactId}
-              name={cur.displayName}
-              photoUrl={cur.photoUrl}
-              size="lg"
-            />
-            <div className="flex flex-col items-center gap-1.5">
-              <FreshnessRing result={freshness} size="md" />
-              <span
-                className="text-[10px] font-semibold uppercase tracking-[0.1em]"
-                style={{ color: bandColor(freshness.band) }}
+        <ContactHeader
+          id={cur.contactId}
+          name={cur.displayName}
+          photoUrl={cur.photoUrl}
+          freshness={freshness}
+          meta={
+            <>
+              <p
+                className="m-0 mt-2 text-[12.5px] md:mt-0 md:text-[13px]"
+                style={{ color: "var(--ink-faint)" }}
               >
-                {bandLabel(freshness.band)}
-              </span>
-            </div>
-          </div>
-          <h1
-            className="m-0 mt-4 break-words"
-            style={{
-              fontFamily:
-                "var(--font-serif, 'Source Serif 4'), Georgia, serif",
-              fontStyle: "italic",
-              fontWeight: 500,
-              fontSize: "clamp(28px, 8vw, 40px)",
-              lineHeight: 0.98,
-              letterSpacing: "-0.022em",
-            }}
-          >
-            {cur.displayName}
-          </h1>
-          <p
-            className="m-0 mt-2 text-[12.5px]"
-            style={{ color: "var(--ink-faint)" }}
-          >
-            {cur.category && <span>{cur.category} · </span>}
-            {cur.reason}
-          </p>
-          {cur.tags.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {cur.tags.map((t) => (
-                <TagChip key={t.id} name={t.name} color={t.color} />
-              ))}
-            </div>
-          )}
-        </header>
-
-        {/* Desktop header — original layout */}
-        <header
-          className="mb-7 hidden grid-cols-[96px_1fr_auto] items-start gap-6 md:grid"
-        >
-          <Avatar
-            id={cur.contactId}
-            name={cur.displayName}
-            photoUrl={cur.photoUrl}
-            size="xl"
-          />
-          <div>
-            <h1
-              className="m-0 mb-2"
-              style={{
-                fontFamily:
-                  "var(--font-serif, 'Source Serif 4'), Georgia, serif",
-                fontStyle: "italic",
-                fontWeight: 500,
-                fontSize: 44,
-                lineHeight: 0.98,
-                letterSpacing: "-0.022em",
-              }}
-            >
-              {cur.displayName}
-            </h1>
-            <p
-              className="m-0 text-[13px]"
-              style={{ color: "var(--ink-faint)" }}
-            >
-              {cur.category && <span>{cur.category} · </span>}
-              {cur.reason}
-            </p>
-            {cur.tags.length > 0 && (
-              <div className="mt-2.5 flex flex-wrap gap-1.5">
-                {cur.tags.map((t) => (
-                  <TagChip key={t.id} name={t.name} color={t.color} />
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="flex flex-col items-center gap-1.5">
-            <FreshnessRing result={freshness} size="md" />
-            <span
-              className="text-[10.5px] font-semibold uppercase tracking-[0.06em]"
-              style={{ color: bandColor(freshness.band) }}
-            >
-              {bandLabel(freshness.band)}
-            </span>
-          </div>
-        </header>
+                {cur.category && <span>{cur.category} · </span>}
+                {cur.reason}
+              </p>
+              {cur.tags.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5 md:mt-2.5">
+                  {cur.tags.map((t) => (
+                    <TagChip key={t.id} name={t.name} color={t.color} />
+                  ))}
+                </div>
+              )}
+            </>
+          }
+        />
 
         <div
           className="grid grid-cols-3 gap-2 border-t pt-5 md:gap-3 md:pt-6"

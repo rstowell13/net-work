@@ -23,10 +23,13 @@ import { db } from "@/lib/db";
 import {
   calendarEvents,
   rawContacts,
-  oauthTokens,
   sources,
 } from "@/db/schema";
-import { clientFromTokens } from "@/lib/google";
+import {
+  clientFromTokens,
+  getSelfEmailFromSource,
+  getTokenForSource,
+} from "@/lib/google";
 import { runImport, type ImportCounters } from "./run";
 import {
   computeCalendarWatermarkUpdate,
@@ -38,31 +41,6 @@ import {
 // of timing out.
 const TIME_BUDGET_MS = 12_000;
 const PAGE_SIZE = 2500; // Calendar API max page size
-
-async function getTokenForSource(sourceId: string) {
-  const [token] = await db
-    .select()
-    .from(oauthTokens)
-    .where(eq(oauthTokens.sourceId, sourceId))
-    .limit(1);
-  if (!token) throw new Error(`No OAuth token for source ${sourceId}`);
-  return {
-    accessToken: token.accessToken,
-    refreshToken: token.refreshToken,
-    expiresAt: token.expiresAt,
-    scopes: token.scopes,
-  };
-}
-
-async function getSelfEmailFromSource(sourceId: string): Promise<string | null> {
-  const [src] = await db
-    .select({ config: sources.config })
-    .from(sources)
-    .where(eq(sources.id, sourceId))
-    .limit(1);
-  const cfg = src?.config as { google_email?: string } | null;
-  return cfg?.google_email?.toLowerCase() ?? null;
-}
 
 async function getWatermark(sourceId: string): Promise<CalendarWatermark> {
   const [src] = await db

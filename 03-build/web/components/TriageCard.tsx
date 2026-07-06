@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Avatar } from "@/components/Avatar";
-import { FreshnessRing } from "@/components/FreshnessRing";
-import { bandColor, bandLabel, type FreshnessResult } from "@/lib/scoring/freshness";
+import { ContactHeader } from "@/components/ContactHeader";
+import { SourceChip } from "@/components/SourceChip";
+import type { FreshnessResult } from "@/lib/scoring/freshness";
 import type { RecentChannel, RecentInteraction } from "@/lib/contacts/recent";
 
 interface Props {
@@ -212,116 +212,25 @@ export function TriageCard({
           Skip
         </span>
 
-        {/* Mobile header: avatar + ring on row 1, name + meta on row 2 */}
-        <header className="mb-6 md:hidden">
-          <div className="flex items-center justify-between gap-4">
-            <Avatar
-              id={contact.id}
-              name={contact.displayName}
-              photoUrl={contact.photoUrl}
-              size="lg"
-            />
-            <div className="flex flex-col items-center gap-1.5">
-              <FreshnessRing result={freshness} size="md" />
-              <span
-                className="text-[10px] font-semibold uppercase tracking-[0.1em]"
-                style={{ color: bandColor(freshness.band) }}
-              >
-                {bandLabel(freshness.band)}
-              </span>
-            </div>
-          </div>
-          <h1
-            className="m-0 mt-4 break-words"
-            style={{
-              fontFamily:
-                "var(--font-serif, 'Source Serif 4'), Georgia, serif",
-              fontStyle: "italic",
-              fontWeight: 500,
-              fontSize: "clamp(30px, 8.5vw, 44px)",
-              lineHeight: 0.98,
-              letterSpacing: "-0.022em",
-              fontVariationSettings: "'opsz' 96",
-            }}
-          >
-            {contact.displayName}
-          </h1>
-          <ContactLines
-            email={contact.primaryEmail}
-            phone={contact.primaryPhone}
-          />
-          <div className="mt-2.5 flex flex-wrap gap-1">
-            {sources.map((s) => (
-              <span
-                key={s}
-                className="rounded px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.04em]"
-                style={{
-                  background: "var(--stone-sunken)",
-                  color: "var(--ink-muted)",
-                }}
-              >
-                {s.replace(/_/g, " ")}
-              </span>
-            ))}
-          </div>
-        </header>
-
-        {/* Desktop header — original 3-column layout */}
-        <header
-          className="mb-7 hidden items-start gap-6 md:grid"
-          style={{ gridTemplateColumns: "96px 1fr auto" }}
-        >
-          <Avatar
-            id={contact.id}
-            name={contact.displayName}
-            photoUrl={contact.photoUrl}
-            size="xl"
-          />
-          <div>
-            <h1
-              className="m-0 mb-2.5"
-              style={{
-                fontFamily:
-                  "var(--font-serif, 'Source Serif 4'), Georgia, serif",
-                fontStyle: "italic",
-                fontWeight: 500,
-                fontSize: 48,
-                lineHeight: 0.98,
-                letterSpacing: "-0.022em",
-                fontVariationSettings: "'opsz' 96",
-              }}
-            >
-              {contact.displayName}
-            </h1>
-            <ContactLines
-              email={contact.primaryEmail}
-              phone={contact.primaryPhone}
-            />
-            <div className="mt-2.5 flex flex-wrap gap-1">
-              {sources.map((s) => (
-                <span
-                  key={s}
-                  className="rounded px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.04em]"
-                  style={{
-                    background: "var(--stone-sunken)",
-                    color: "var(--ink-muted)",
-                  }}
-                >
-                  {s.replace(/_/g, " ")}
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-col items-center gap-1.5">
-            <FreshnessRing result={freshness} size="md" />
-            <span
-              className="text-[10.5px] font-semibold uppercase tracking-[0.06em]"
-              style={{ color: bandColor(freshness.band) }}
-            >
-              {bandLabel(freshness.band)}
-            </span>
-          </div>
-        </header>
+        <ContactHeader
+          id={contact.id}
+          name={contact.displayName}
+          photoUrl={contact.photoUrl}
+          freshness={freshness}
+          meta={
+            <>
+              <ContactLines
+                email={contact.primaryEmail}
+                phone={contact.primaryPhone}
+              />
+              <div className="mt-2.5 flex flex-wrap gap-1">
+                {sources.map((s) => (
+                  <SourceChip key={s} label={s.replace(/_/g, " ")} />
+                ))}
+              </div>
+            </>
+          }
+        />
 
         <div
           className="mb-6 grid grid-cols-3 border-y py-4"

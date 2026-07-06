@@ -9,8 +9,8 @@
 import { google } from "googleapis";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { rawContacts, oauthTokens, sources } from "@/db/schema";
-import { clientFromTokens } from "@/lib/google";
+import { rawContacts, sources } from "@/db/schema";
+import { clientFromTokens, getTokenForSource } from "@/lib/google";
 import { runImport, type ImportCounters } from "./run";
 
 const PERSON_FIELDS = [
@@ -115,21 +115,6 @@ export async function syncGoogleContacts(sourceId: string) {
       } while (pageToken);
     },
   });
-}
-
-async function getTokenForSource(sourceId: string) {
-  const [token] = await db
-    .select()
-    .from(oauthTokens)
-    .where(eq(oauthTokens.sourceId, sourceId))
-    .limit(1);
-  if (!token) throw new Error(`No OAuth token for source ${sourceId}`);
-  return {
-    accessToken: token.accessToken,
-    refreshToken: token.refreshToken,
-    expiresAt: token.expiresAt,
-    scopes: token.scopes,
-  };
 }
 
 /**
