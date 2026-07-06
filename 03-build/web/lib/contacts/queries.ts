@@ -404,6 +404,87 @@ export async function listContacts(
   });
 }
 
+export interface ContactRawMember {
+  id: string;
+  emails: string[] | null;
+  phones: string[] | null;
+  linkedinUrl: string | null;
+  sourceKind: string;
+}
+
+export interface ContactDetail {
+  contact: typeof schema.contacts.$inferSelect;
+  rawMembers: ContactRawMember[];
+  followUps: (typeof schema.followUps.$inferSelect)[];
+  mergeCandidate: typeof schema.mergeCandidates.$inferSelect | null;
+}
+
+/**
+ * Consolidates the contact-detail page's inline queries: the contact row
+ * (scoped to userId + not soft-deleted), its raw source records, open/closed
+ * follow-ups, and the most recent merge candidate that resolved into it.
+ * Freshness, diary, relationship-summary inputs, and tags stay separate
+ * calls (getFreshnessForContactIds / getDiary / getRelationshipInputs /
+ * getTagsForContact / listTags) — they have their own cache/streaming needs.
+ */
+export async function getContactDetail(
+  userId: string,
+  contactId: string,
+): Promise<ContactDetail | null> {
+  const [contact] = await db
+    .select()
+    .from(schema.contacts)
+    .where(
+      and(
+        eq(schema.contacts.id, contactId),
+        eq(schema.contacts.userId, userId),
+        isNull(schema.contacts.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!contact) return null;
+
+  const [rawMembers, followUps, mergeCandidates] = await Promise.all([
+    db
+      .select({
+        id: schema.rawContacts.id,
+        emails: schema.rawContacts.emails,
+        phones: schema.rawContacts.phones,
+        linkedinUrl: schema.rawContacts.linkedinUrl,
+        sourceKind: schema.sources.kind,
+      })
+      .from(schema.rawContacts)
+      .innerJoin(
+        schema.sources,
+        eq(schema.sources.id, schema.rawContacts.sourceId),
+      )
+      .where(eq(schema.rawContacts.contactId, contactId)),
+    db
+      .select()
+      .from(schema.followUps)
+      .where(
+        and(
+          eq(schema.followUps.contactId, contactId),
+          isNull(schema.followUps.deletedAt),
+        ),
+      )
+      .orderBy(schema.followUps.createdAt),
+    db
+      .select()
+      .from(schema.mergeCandidates)
+      .where(eq(schema.mergeCandidates.resultingContactId, contactId))
+      .orderBy(desc(schema.mergeCandidates.resolvedAt))
+      .limit(1),
+  ]);
+
+  return {
+    contact,
+    rawMembers,
+    followUps,
+    mergeCandidate: mergeCandidates[0] ?? null,
+  };
+}
+
 export async function getStatusCounts(userId: string) {
   const rows = await db
     .select({
