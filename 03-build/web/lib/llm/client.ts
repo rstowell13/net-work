@@ -1,6 +1,9 @@
 /**
  * Minimal OpenRouter client (OpenAI-compatible chat-completions API).
- * Model is configurable via OPENROUTER_MODEL; default is DeepSeek V4.
+ * Model is configurable via OPENROUTER_MODEL; default is Gemini 3 Flash
+ * (chosen 2026-07 for summary quality + provider data policy at negligible
+ * cost — see OPENROUTER_MODEL in .env.example). Fallbacks default to a
+ * stable non-preview chain in case the preview slug is retired.
  *
  * Throws `LLM_NOT_CONFIGURED` when OPENROUTER_API_KEY is missing so callers
  * can render a clear "configure your key" state instead of a 500.
@@ -27,8 +30,12 @@ export interface ChatCompletionResult {
 }
 
 function modelChain(): string[] {
-  const primary = process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-chat";
-  const fallbacks = (process.env.OPENROUTER_FALLBACK_MODELS ?? "")
+  const primary =
+    process.env.OPENROUTER_MODEL ?? "google/gemini-3-flash-preview";
+  const fallbacks = (
+    process.env.OPENROUTER_FALLBACK_MODELS ??
+    "google/gemini-2.5-flash,deepseek/deepseek-chat"
+  )
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
